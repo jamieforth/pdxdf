@@ -87,6 +87,11 @@ class Xdf(RawXdf):
             ignore_missing_cols=ignore_missing_cols,
         )
 
+    def is_marker_stream(self, stream_id):
+        """Test if stream is a marker stream."""
+        srate = self.info(stream_id)["nominal_srate"].item()
+        return srate == 0
+
     @XdfDecorators.loaded
     def channel_info(
         self,
@@ -122,6 +127,23 @@ class Xdf(RawXdf):
         if isinstance(channel_info, dict) and concat:
             channel_info = pd.concat(channel_info, axis=1)
         return channel_info
+
+    def channel_scalings(self, *stream_ids, channel_scale_field):
+        """Return a dictionary of DataFrames with channel scaling values."""
+        stream_units = self.channel_info(
+            *stream_ids,
+            cols=channel_scale_field,
+            ignore_missing_cols=True,
+            with_stream_id=True,
+        )
+        if stream_units is not None:
+            scaling = {
+                stream_id: ch_units.apply(
+                    lambda units: [1e-6 if u in microvolts else 1 for u in units]
+                )
+                for stream_id, ch_units in stream_units.items()
+            }
+            return scaling
 
     @XdfDecorators.loaded
     def footer(self, *stream_ids, exclude=[], cols=None, ignore_missing_cols=False):
@@ -218,23 +240,6 @@ class Xdf(RawXdf):
             with_stream_id=with_stream_id,
         )
 
-    def channel_scalings(self, *stream_ids, channel_scale_field):
-        """Return a dictionary of DataFrames with channel scaling values."""
-        stream_units = self.channel_info(
-            *stream_ids,
-            cols=channel_scale_field,
-            ignore_missing_cols=True,
-            with_stream_id=True,
-        )
-        if stream_units is not None:
-            scaling = {
-                stream_id: ch_units.apply(
-                    lambda units: [1e-6 if u in microvolts else 1 for u in units]
-                )
-                for stream_id, ch_units in stream_units.items()
-            }
-            return scaling
-
     def data(
         self,
         *stream_ids,
@@ -284,7 +289,7 @@ class Xdf(RawXdf):
             ts = pd.concat(ts, axis=1).sort_index()
             return ts
         else:
-            return self.single_or_multi_stream_data(ts, with_stream_id)
+            return self._single_or_multi_stream_data(ts, with_stream_id)
 
     def time_stamp_summary(self, *stream_ids, exclude=[]):
         """Generate a summary of loaded time-stamp data."""
@@ -519,9 +524,7 @@ class Xdf(RawXdf):
                 }
 
         if channel_name_field:
-            ch_labels = self.channel_info(
-                cols=channel_name_field, with_stream_id=True
-            )
+            ch_labels = self.channel_info(cols=channel_name_field, with_stream_id=True)
             if ch_labels:
                 data = {
                     stream_id: ts.rename(
@@ -640,7 +643,7 @@ class Xdf(RawXdf):
         return data
 
     def _check_columns(self, df, columns, ignore_missing):
-        columns = self.remove_duplicates(columns)
+        columns = self._remove_duplicates(columns)
         valid_cols = [col for col in columns if col in df.columns]
         if not ignore_missing and len(valid_cols) != len(columns):
             invalid_cols = set(columns).difference(df.columns)

@@ -25,9 +25,9 @@ class RawXdf(BaseXdf, Sequence):
 
     Properties:
         loaded: Boolean indicating if a file has been loaded.
-        load_params: Dict of pyxdf_load parameters.
-        num_loaded_streams: number of streams currently loaded.
         loaded_stream_ids: IDs for all loaded streams.
+        num_loaded_streams: number of streams currently loaded.
+        load_params: Dict of pyxdf_load parameters.
     """
 
     _loaded = False
@@ -137,6 +137,11 @@ class RawXdf(BaseXdf, Sequence):
         if flatten:
             data = self.__flatten(data)
         return data
+
+    def is_marker_stream(self, stream_id):
+        """Test if stream is a marker stream."""
+        srate = float(self.info(stream_id)["nominal_srate"])
+        return srate == 0
 
     @XdfDecorators.loaded
     def desc(self, *stream_ids, exclude=[], with_stream_id=False):
@@ -295,72 +300,6 @@ class RawXdf(BaseXdf, Sequence):
         }
 
         return data
-
-    def single_or_multi_stream_data(self, data, with_stream_id=False):
-        """Return single stream data or dictionary."""
-        if len(data) == 1 and not with_stream_id:
-            return data[list(data.keys())[0]]
-        else:
-            return data
-
-    def resample(self, *stream_ids, fs_new, exclude=[]):
-        """
-        Resample multiple XDF streams to a given frequency.
-
-        Based on mneLab:
-        https://github.com/cbrnr/mnelab/blob/main/src/mnelab/io/xdf.py.
-
-        Parameters
-        ----------
-        streams : dict
-            A dictionary mapping stream IDs to XDF streams.
-        stream_ids : list[int]
-            The IDs of the desired streams.
-        fs_new : float
-            Resampling target frequency in Hz.
-
-        Returns
-        -------
-        all_time_series : np.ndarray
-            Array of shape (n_samples, n_channels) containing raw data. Time intervals where a
-            stream has no data contain `np.nan`.
-        first_time : float
-            Time of the very first sample in seconds.
-        """
-        start_times = []
-        end_times = []
-        n_total_chans = 0
-        for stream_id, stream in self.time_stamps(
-            *stream_ids, exclude=exclude, with_stream_id=True
-        ).items():
-            start_times.append(stream[0])
-            end_times.append(stream[-1])
-            n_total_chans += int(self.metadata(stream_id)["channel_count"])
-        first_time = min(start_times)
-        last_time = max(end_times)
-
-        n_samples = int(np.ceil((last_time - first_time) * fs_new))
-        all_time_series = np.full((n_samples, n_total_chans), np.nan)
-
-        col_start = 0
-        for stream_id, stream in self.time_stamps(
-            *stream_ids, exclude=exclude, with_stream_id=True
-        ).items():
-            start_time = stream[0]
-            end_time = stream[-1]
-            len_new = int(np.ceil((end_time - start_time) * fs_new))
-
-            x_old = self.time_series(stream_id, exclude=exclude)
-            x_new = scipy.signal.resample(x_old, len_new, axis=0)
-
-            row_start = int(np.floor((stream[0] - first_time) * fs_new))
-            row_end = row_start + x_new.shape[0]
-            col_end = col_start + x_new.shape[1]
-            all_time_series[row_start:row_end, col_start:col_end] = x_new
-
-            col_start += x_new.shape[1]
-
-        return all_time_series, first_time
 
     # Non-public methods.
 
@@ -587,7 +526,7 @@ class RawXdf(BaseXdf, Sequence):
             except KeyError as exc:
                 print(exc)
                 return None
-        return self.single_or_multi_stream_data(data, with_stream_id)
+        return self._single_or_multi_stream_data(data, with_stream_id)
 
     def _assert_loaded(self):
         """Assert data is loaded before continuing."""
@@ -596,7 +535,7 @@ class RawXdf(BaseXdf, Sequence):
 
     def _assert_stream_ids(self, *stream_ids, data):
         """Assert requested streams are loaded before continuing."""
-        unique_ids = self.remove_duplicates(stream_ids)
+        unique_ids = self._remove_duplicates(stream_ids)
         valid_ids = set(unique_ids).intersection(data.keys())
         if len(valid_ids) != len(unique_ids):
             invalid_ids = list(valid_ids.symmetric_difference(stream_ids))
