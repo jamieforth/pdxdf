@@ -67,12 +67,12 @@ class BaseXdf:
         """Load an XDF file."""
         raise NotImplementedError()
 
-    def metadata(self):
-        """Return loaded stream metadata."""
+    def info(self):
+        """Return loaded stream info."""
         raise NotImplementedError()
 
     def desc(self):
-        """Return loaded stream extensible desc metadata."""
+        """Return loaded stream extensible desc info."""
         raise NotImplementedError()
 
     def segments(self):
@@ -83,12 +83,12 @@ class BaseXdf:
         """Return loaded stream clock segments."""
         raise NotImplementedError()
 
-    def channel_metadata(self):
-        """Return loaded stream channel metadata."""
+    def channel_info(self):
+        """Return loaded stream channel info."""
         raise NotImplementedError()
 
     def footer(self):
-        """Return loaded stream footer metadata."""
+        """Return loaded stream footer info."""
         raise NotImplementedError()
 
     def clock_offsets(self):

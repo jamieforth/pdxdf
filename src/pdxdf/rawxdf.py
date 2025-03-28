@@ -7,8 +7,8 @@ import numpy as np
 import pyxdf
 import scipy
 
-from .decorators import XdfDecorators
 from .basexdf import BaseXdf
+from .decorators import XdfDecorators
 from .errors import (
     NoLoadableStreamsError,
     XdfAlreadyLoadedError,
@@ -20,8 +20,8 @@ from .errors import (
 class RawXdf(BaseXdf, Sequence):
     """Thin wrapper for loading and accessing raw XDF data.
 
-    Provides convenience methods for loading and accessing raw XDF data
-    (lists of dictionaries).
+    Provides convenience methods for loading and accessing raw XDF data (lists
+    of dictionaries).
 
     Properties:
         loaded: Boolean indicating if a file has been loaded.
@@ -93,11 +93,11 @@ class RawXdf(BaseXdf, Sequence):
 
         # Free memory
         del self._header
-        del self._metadata
+        del self._info
         del self._desc
         del self._segments
         del self._clock_segments
-        del self._channel_metadata
+        del self._channel_info
         del self._footer
         del self._clock_offsets
         del self._time_series
@@ -109,23 +109,23 @@ class RawXdf(BaseXdf, Sequence):
         return self._header
 
     @XdfDecorators.loaded
-    def metadata(
+    def info(
         self, *stream_ids, exclude=[], with_stream_id=False, desc=False, flatten=False
     ):
-        """Return raw stream metadata.
+        """Return raw stream info.
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
 
         Flatten=True will place all leaf-node key-value pairs in nested
         dictionaries within the top-level dictionary.
         """
         data = self._get_stream_data(
             *stream_ids,
-            data=self._metadata,
+            data=self._info,
             exclude=exclude,
             with_stream_id=with_stream_id,
         )
@@ -140,11 +140,11 @@ class RawXdf(BaseXdf, Sequence):
 
     @XdfDecorators.loaded
     def desc(self, *stream_ids, exclude=[], with_stream_id=False):
-        """Return custom stream metadata.
+        """Return custom stream desc info.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         data = self._get_stream_data(
             *stream_ids,
@@ -158,9 +158,9 @@ class RawXdf(BaseXdf, Sequence):
     def segments(self, *stream_ids, exclude=[], with_stream_id=False):
         """Return stream segments.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         data = self._get_stream_data(
             *stream_ids,
@@ -174,9 +174,9 @@ class RawXdf(BaseXdf, Sequence):
     def clock_segments(self, *stream_ids, exclude=[], with_stream_id=False):
         """Return stream clock segments.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         data = self._get_stream_data(
             *stream_ids,
@@ -187,32 +187,32 @@ class RawXdf(BaseXdf, Sequence):
         return data
 
     @XdfDecorators.loaded
-    def channel_metadata(self, *stream_ids, exclude=[], with_stream_id=False):
-        """Return raw stream channel metadata.
+    def channel_info(self, *stream_ids, exclude=[], with_stream_id=False):
+        """Return raw stream channel info.
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
-        if self._channel_metadata:
+        if self._channel_info:
             return self._get_stream_data(
                 *stream_ids,
-                data=self._channel_metadata,
+                data=self._channel_info,
                 exclude=exclude,
                 with_stream_id=with_stream_id,
             )
 
     @XdfDecorators.loaded
     def footer(self, *stream_ids, exclude=[], with_stream_id=False):
-        """Return raw stream footer metadata.
+        """Return raw stream footer.
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         if self._footer:
             return self._get_stream_data(
@@ -228,9 +228,9 @@ class RawXdf(BaseXdf, Sequence):
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         return self._get_stream_data(
             *stream_ids,
@@ -245,9 +245,9 @@ class RawXdf(BaseXdf, Sequence):
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         return self._get_stream_data(
             *stream_ids,
@@ -262,9 +262,9 @@ class RawXdf(BaseXdf, Sequence):
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         return self._get_stream_data(
             *stream_ids,
@@ -278,9 +278,9 @@ class RawXdf(BaseXdf, Sequence):
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams. Single
-        streams are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         time_stamps = self.time_stamps(
             *stream_ids, exclude=exclude, with_stream_id=True
@@ -411,11 +411,11 @@ class RawXdf(BaseXdf, Sequence):
 
         # Parse XDF into separate structures.
         self._header = self._parse_header(header, **parse_kwargs)
-        self._metadata = self._parse_metadata(streams, **parse_kwargs)
+        self._info = self._parse_info(streams, **parse_kwargs)
         self._desc = self._parse_desc(streams, **parse_kwargs)
         self._segments = self._parse_segments(streams, **parse_kwargs)
         self._clock_segments = self._parse_clock_segments(streams, **parse_kwargs)
-        self._channel_metadata = self._parse_channel_metadata(streams, **parse_kwargs)
+        self._channel_info = self._parse_channel_info(streams, **parse_kwargs)
         self._footer = self._parse_footer(streams, **parse_kwargs)
         self._clock_offsets = self._parse_clock_offsets(streams, **parse_kwargs)
         self._time_series = self._parse_time_series(streams, **parse_kwargs)
@@ -443,9 +443,9 @@ class RawXdf(BaseXdf, Sequence):
 
     # Parsing methods.
 
-    # These methods are called when XDF data is loaded and the returned
-    # data is cached within the instance. Sub-classes can override
-    # these methods for custom parsing requirements.
+    # These methods are called when XDF data is loaded and the returned data is
+    # cached within the instance. Sub-classes can override these methods for
+    # custom parsing requirements.
 
     @XdfDecorators.parse
     def _parse_header(self, data, **kwargs):
@@ -454,15 +454,15 @@ class RawXdf(BaseXdf, Sequence):
         return header
 
     @XdfDecorators.parse
-    def _parse_metadata(self, data, flatten=False, pop_singleton_lists=True, **kwargs):
-        metadata = self.__collect_stream_data(
+    def _parse_info(self, data, flatten=False, pop_singleton_lists=True, **kwargs):
+        info = self.__collect_stream_data(
             data=data,
             data_path=["info"],
             exclude=["desc", "segments", "clock_segments"],
             flatten=flatten,
             pop_singleton_lists=pop_singleton_lists,
         )
-        return metadata
+        return info
 
     @XdfDecorators.parse
     def _parse_desc(self, data, flatten=False, pop_singleton_lists=True, **kwargs):
@@ -495,15 +495,15 @@ class RawXdf(BaseXdf, Sequence):
         return segments
 
     @XdfDecorators.parse
-    def _parse_channel_metadata(self, data, pop_singleton_lists=True, **kwargs):
-        # Extract channel metadata from stream metadata.
-        ch_metadata = self.__collect_stream_data(
+    def _parse_channel_info(self, data, pop_singleton_lists=True, **kwargs):
+        # Extract channel info from stream info.
+        ch_info = self.__collect_stream_data(
             data=data,
             data_path=["info", "desc", "channels", "channel"],
             pop_singleton_lists=pop_singleton_lists,
             allow_none=True,
         )
-        return ch_metadata
+        return ch_info
 
     @XdfDecorators.parse
     def _parse_footer(self, data, flatten=False, pop_singleton_lists=True, **kwargs):
@@ -545,8 +545,8 @@ class RawXdf(BaseXdf, Sequence):
 
     @XdfDecorators.parse
     def _parse_time_stamps(self, data, **kwargs):
-        # Extract time stamps from stream data, e.g. time stamps
-        # corresponding to EEG samples.
+        # Extract time stamps from stream data, e.g. time stamps corresponding
+        # to EEG samples.
         time_stamps = self.__collect_stream_data(
             data=data,
             data_path="time_stamps",
@@ -590,12 +590,12 @@ class RawXdf(BaseXdf, Sequence):
         return self.single_or_multi_stream_data(data, with_stream_id)
 
     def _assert_loaded(self):
-        """Assert that data is loaded before continuing."""
+        """Assert data is loaded before continuing."""
         if not self.loaded:
             raise XdfNotLoadedError
 
     def _assert_stream_ids(self, *stream_ids, data):
-        """Assert that requested streams are loaded before continuing."""
+        """Assert requested streams are loaded before continuing."""
         unique_ids = self.remove_duplicates(stream_ids)
         valid_ids = set(unique_ids).intersection(data.keys())
         if len(valid_ids) != len(unique_ids):
@@ -619,11 +619,11 @@ class RawXdf(BaseXdf, Sequence):
     ):
         """Extract data from nested stream dictionaries at the data_path.
 
-        Stream data is always returned as a dictionary {stream_id: data}
-        where number of items is equal to the number of streams.
+        Stream data is always returned as a dictionary {stream_id: data} where
+        number of items is equal to the number of streams.
 
-        If no data is available at any key in the data path the item
-        value will be None.
+        If no data is available at any key in the data path the item value will
+        be None.
         """
         if not isinstance(data_path, list):
             data_path = [data_path]

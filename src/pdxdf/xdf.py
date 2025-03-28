@@ -15,12 +15,11 @@ from .rawxdf import RawXdf, XdfDecorators
 class Xdf(RawXdf):
     """Main class for XDF data processing with pandas.
 
-    Provides a pandas-based layer of abstraction over raw XDF data to
-    simplify data processing.
+    Provides a pandas-based layer of abstraction over raw XDF data.
     """
 
-    # Data types for XDF metadata.
-    _metadata_types = {
+    # Data types for XDF info.
+    _info_types = {
         "channel_count": np.int16,
         "nominal_srate": np.float64,
         "v4data_port": np.int32,
@@ -60,8 +59,8 @@ class Xdf(RawXdf):
         """Load XDF data from file using pyxdf.load_xdf().
 
         Any pyxdf.load_xdf() kwargs provided will be passed to that
-        function. All other kwargs are assumed to be stream properties
-        and will be passed to parsing methods.
+        function. All other kwargs are assumed to be stream properties and will
+        be passed to parsing methods.
         """
         try:
             self._load(
@@ -75,21 +74,21 @@ class Xdf(RawXdf):
         return self
 
     @XdfDecorators.loaded
-    def metadata(self, *stream_ids, exclude=[], cols=None, ignore_missing_cols=False):
-        """Return stream metadata as a DataFrame.
+    def info(self, *stream_ids, exclude=[], cols=None, ignore_missing_cols=False):
+        """Return stream info as a DataFrame.
 
         Select data for stream_ids or default all loaded streams.
         """
         return self._get_stream_data(
             *stream_ids,
-            data=self._metadata,
+            data=self._info,
             exclude=exclude,
             cols=cols,
             ignore_missing_cols=ignore_missing_cols,
         )
 
     @XdfDecorators.loaded
-    def channel_metadata(
+    def channel_info(
         self,
         *stream_ids,
         exclude=[],
@@ -98,36 +97,35 @@ class Xdf(RawXdf):
         with_stream_id=False,
         concat=False,
     ):
-        """Return channel metadata as a DataFrame.
+        """Return channel info as a DataFrame.
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id:
-        DataFrame} where number of items is equal to the number of
-        streams. Single streams are returned as is unless
-        with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: DataFrame}
+        where number of items is equal to the number of streams. Single streams
+        are returned as is unless with_stream_id=True.
 
-        When concat=True return data concatenated into a single
-        DataFrame along columns.
+        When concat=True return data concatenated into a single DataFrame along
+        columns.
         """
-        if not self._channel_metadata:
-            print("No channel metadata.")
+        if not self._channel_info:
+            print("No channel info.")
             return None
-        channel_metadata = self._get_stream_data(
+        channel_info = self._get_stream_data(
             *stream_ids,
-            data=self._channel_metadata,
+            data=self._channel_info,
             exclude=exclude,
             cols=cols,
             ignore_missing_cols=ignore_missing_cols,
             with_stream_id=with_stream_id,
         )
-        if isinstance(channel_metadata, dict) and concat:
-            channel_metadata = pd.concat(channel_metadata, axis=1)
-        return channel_metadata
+        if isinstance(channel_info, dict) and concat:
+            channel_info = pd.concat(channel_info, axis=1)
+        return channel_info
 
     @XdfDecorators.loaded
     def footer(self, *stream_ids, exclude=[], cols=None, ignore_missing_cols=False):
-        """Return stream footer metadata as a DataFrame.
+        """Return stream footer info as a DataFrame.
 
         Select data for stream_ids or default all loaded streams.
         """
@@ -155,10 +153,9 @@ class Xdf(RawXdf):
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id:
-        DataFrame} where number of items is equal to the number of
-        streams. Single streams are returned as is unless
-        with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: DataFrame}
+        where number of items is equal to the number of streams. Single streams
+        are returned as is unless with_stream_id=True.
         """
         if not self._clock_offsets:
             print("No clock-offset data.")
@@ -185,10 +182,9 @@ class Xdf(RawXdf):
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id:
-        DataFrame} where number of items is equal to the number of
-        streams. Single streams are returned as is unless
-        with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: DataFrame}
+        where number of items is equal to the number of streams. Single streams
+        are returned as is unless with_stream_id=True.
         """
         if not self._time_series:
             print("No time-series data.")
@@ -208,10 +204,9 @@ class Xdf(RawXdf):
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id:
-        DataFrame} where number of items is equal to the number of
-        streams. Single streams are returned as is unless
-        with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: DataFrame}
+        where number of items is equal to the number of streams. Single streams
+        are returned as is unless with_stream_id=True.
         """
         if not self._time_stamps:
             print("No time-stamp data.")
@@ -225,7 +220,7 @@ class Xdf(RawXdf):
 
     def channel_scalings(self, *stream_ids, channel_scale_field):
         """Return a dictionary of DataFrames with channel scaling values."""
-        stream_units = self.channel_metadata(
+        stream_units = self.channel_info(
             *stream_ids,
             cols=channel_scale_field,
             ignore_missing_cols=True,
@@ -409,8 +404,8 @@ class Xdf(RawXdf):
             header["datetime"] = pd.to_datetime(header["datetime"])
         return header
 
-    def _parse_metadata(self, data, **kwargs):
-        """Parse metadata for all loaded streams into a DataFrame.
+    def _parse_info(self, data, **kwargs):
+        """Parse info for all loaded streams into a DataFrame.
 
         Called automatically when XDF data is loaded and the returned
         DataFrame is cached within this instance.
@@ -420,20 +415,20 @@ class Xdf(RawXdf):
 
         Returns a DataFrame.
         """
-        data = super()._parse_metadata(data)
+        data = super()._parse_info(data)
         df = pd.DataFrame(data).T
         try:
-            df = df.astype(self._metadata_types)
+            df = df.astype(self._info_types)
         except KeyError:
-            # Don't throw an error if metadata does not contain all
-            # columns specified in metadata types.
+            # Don't throw an error if info does not contain all columns
+            # specified in info types.
             pass
         assert all(df.index == df["stream_id"])
         df.set_index("stream_id", inplace=True)
         return df
 
-    def _parse_channel_metadata(self, data, **kwargs):
-        """Parse channel metadata for all loaded streams into a DataFrame.
+    def _parse_channel_info(self, data, **kwargs):
+        """Parse channel info for all loaded streams into a DataFrame.
 
         Called automatically when XDF data is loaded and the returned
         DataFrame is cached within the instance.
@@ -444,9 +439,9 @@ class Xdf(RawXdf):
         Returns a dictionary {stream_id: DataFrame} where number of
         items is equal to the number of streams.
         """
-        # Check that data streams have valid channel metadata.
-        data = super()._parse_channel_metadata(data)
-        data = self._check_empty_streams(data, "channel metadata")
+        # Check that data streams have valid channel info.
+        data = super()._parse_channel_info(data)
+        data = self._check_empty_streams(data, "channel info")
         if not data:
             return None
         # Handle streams with only a single channel.
@@ -455,7 +450,7 @@ class Xdf(RawXdf):
         return data
 
     def _parse_footer(self, data, **kwargs):
-        """Parse footer metadata for all loaded streams into a DataFrame.
+        """Parse footer for all loaded streams into a DataFrame.
 
         Called automatically when XDF data is loaded and the returned
         DataFrame is cached within the instance.
@@ -496,7 +491,7 @@ class Xdf(RawXdf):
         """Parse time-series data for all loaded streams into a DataFrame.
 
         Optionally scales values and sets channel names according to channel
-        metadata.
+        info.
 
         Called automatically when XDF data is loaded and the returned
         DataFrame is cached within the instance.
@@ -524,7 +519,7 @@ class Xdf(RawXdf):
                 }
 
         if channel_name_field:
-            ch_labels = self.channel_metadata(
+            ch_labels = self.channel_info(
                 cols=channel_name_field, with_stream_id=True
             )
             if ch_labels:
