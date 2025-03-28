@@ -8,8 +8,8 @@ import pyxdf
 class BaseXdf:
     """Thin wrapper for inspecting raw XDF data.
 
-    Provides convenience methods for accessing raw XDF file stream
-    information without loading stream data.
+    Provides convenience methods for accessing raw XDF file stream information
+    without loading stream data.
 
     Properties:
         filename: XDF file - string or Path.
@@ -65,10 +65,6 @@ class BaseXdf:
 
     def load(self):
         """Load an XDF file."""
-        raise NotImplementedError()
-
-    def streams(self):
-        """Return loaded stream data."""
         raise NotImplementedError()
 
     def metadata(self):
