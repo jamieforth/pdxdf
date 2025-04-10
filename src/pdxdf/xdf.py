@@ -1,6 +1,6 @@
 """Main Xdf class for working with XDF data."""
 
-from warnings import warn
+import logging
 
 import mne
 import numpy as np
@@ -11,6 +11,8 @@ from .constants import microvolts
 from .errors import NoLoadableStreamsError, XdfAlreadyLoadedError
 from .rawxdf import RawXdf, XdfDecorators
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 class Xdf(RawXdf):
     """Main class for XDF data processing with pandas.
@@ -643,7 +645,7 @@ class Xdf(RawXdf):
                 }"""
             )
         if not data:
-            print(f"No {name} found!")
+            logger.warning(f"No {name} found!")
             return None
         return data
 
