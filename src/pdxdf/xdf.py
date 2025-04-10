@@ -96,6 +96,11 @@ class Xdf(RawXdf):
         return srate == 0
 
     @XdfDecorators.loaded
+    def segment_info(self, *stream_ids, exclude=[]):
+        segment_info = super().segment_info(*stream_ids, exclude=exclude)
+        return pd.DataFrame(segment_info._asdict())
+
+    @XdfDecorators.loaded
     def channel_info(
         self,
         *stream_ids,
