@@ -300,8 +300,8 @@ class Xdf(RawXdf):
         else:
             return self._single_or_multi_stream_data(ts, with_stream_id)
 
-    def time_stamp_summary(self, *stream_ids, exclude=[]):
     @XdfDecorators.loaded
+    def time_stamp_info(self, *stream_ids, exclude=[]):
         """Generate a summary of loaded time-stamp data."""
         time_stamps = self.time_stamps(
             *stream_ids, exclude=exclude, with_stream_id=True
@@ -312,21 +312,31 @@ class Xdf(RawXdf):
         for stream_id, ts in time_stamps.items():
             data[stream_id] = {
                 "sample_count": len(ts),
-                "first_timestamp": ts.iloc[0, 0],
-                "last_timestamp": ts.iloc[-1, 0],
+                "first_timestamp": ts.min().item(),
+                "last_timestamp": ts.max().item(),
             }
         data = pd.DataFrame(data).T
         data.index.rename("stream_id", inplace=True)
         data["sample_count"] = data["sample_count"].astype(int)
         data["duration_sec"] = data["last_timestamp"] - data["first_timestamp"]
         data["duration_min"] = data["duration_sec"] / 60
-        data["effective_srate"] = 1 / (data["duration_sec"] / data["sample_count"])
+        data["effective_srate"] = (data["sample_count"] - 1) / data["duration_sec"]
         data.attrs.update({"load_params": self.load_params})
         return data
 
-    def time_stamp_intervals(self, *stream_ids, exclude=[], with_stream_id=True):
-        """Return time-stamp intervals for each stream."""
     @XdfDecorators.loaded
+    def time_stamp_intervals(
+        self, *stream_ids, exclude=[], concat=False, with_stream_id=False
+    ):
+        """Return time-stamp intervals for each stream.
+
+        Multiple streams are returned as a dictionary {stream_id: DataFrame}
+        where number of items is equal to the number of streams. Single streams
+        are returned as is unless with_stream_id=True.
+
+        When concat=True return data concatenated into a single DataFrame along
+        columns.
+        """
         time_stamps = self.time_stamps(
             *stream_ids, exclude=exclude, with_stream_id=True
         )
@@ -335,9 +345,12 @@ class Xdf(RawXdf):
         data = {}
         for stream_id, ts in time_stamps.items():
             data[stream_id] = ts["time_stamp"].diff()
-        data = pd.DataFrame(data)
-        data.attrs.update({"load_params": self.load_params})
-        return data
+        if concat:
+            data = pd.DataFrame(data)
+            data.attrs.update({"load_params": self.load_params})
+            return data
+        else:
+            return self._single_or_multi_stream_data(data, with_stream_id)
 
     def resample(self, *stream_ids, fs_new, exclude=[], cols=None,
                  ignore_missing_cols=False):
