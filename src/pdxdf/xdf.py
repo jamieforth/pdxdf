@@ -87,6 +87,7 @@ class Xdf(RawXdf):
             ignore_missing_cols=ignore_missing_cols,
         )
 
+    @XdfDecorators.loaded
     def is_marker_stream(self, stream_id):
         """Test if stream is a marker stream."""
         srate = self.info(stream_id)["nominal_srate"].item()
@@ -128,6 +129,7 @@ class Xdf(RawXdf):
             channel_info = pd.concat(channel_info, axis=1)
         return channel_info
 
+    @XdfDecorators.loaded
     def channel_scalings(self, *stream_ids, channel_scale_field):
         """Return a dictionary of DataFrames with channel scaling values."""
         stream_units = self.channel_info(
@@ -240,6 +242,7 @@ class Xdf(RawXdf):
             with_stream_id=with_stream_id,
         )
 
+    @XdfDecorators.loaded
     def data(
         self,
         *stream_ids,
@@ -253,15 +256,14 @@ class Xdf(RawXdf):
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id:
-        DataFrame} where number of items is equal to the number of
-        streams. Single streams are returned as is unless
-        with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: DataFrame}
+        where number of items is equal to the number of streams. Single streams
+        are returned as is unless with_stream_id=True.
 
-        When concat=True return data concatenated into a single
-        DataFrame along columns. Warning - this can generate large
-        DataFrames with shape (total_samples, total_columns) as every
-        sample is indexed by its own timestamp.
+        When concat=True return data concatenated into a single DataFrame along
+        columns. Warning - this can generate large DataFrames with shape
+        (total_samples, total_columns) as every sample is indexed by its own
+        timestamp.
 
         This does not align samples to a common time index, for that see
         `resample`.
@@ -292,6 +294,7 @@ class Xdf(RawXdf):
             return self._single_or_multi_stream_data(ts, with_stream_id)
 
     def time_stamp_summary(self, *stream_ids, exclude=[]):
+    @XdfDecorators.loaded
         """Generate a summary of loaded time-stamp data."""
         time_stamps = self.time_stamps(
             *stream_ids, exclude=exclude, with_stream_id=True
@@ -316,6 +319,7 @@ class Xdf(RawXdf):
 
     def time_stamp_intervals(self, *stream_ids, exclude=[], with_stream_id=True):
         """Return time-stamp intervals for each stream."""
+    @XdfDecorators.loaded
         time_stamps = self.time_stamps(
             *stream_ids, exclude=exclude, with_stream_id=True
         )
@@ -330,6 +334,7 @@ class Xdf(RawXdf):
 
     def resample(self, *stream_ids, fs_new, exclude=[], cols=None,
                  ignore_missing_cols=False):
+    @XdfDecorators.loaded
         """
         Resample multiple XDF streams to a given frequency.
 

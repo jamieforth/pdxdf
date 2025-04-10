@@ -2,7 +2,7 @@
 
 from functools import wraps
 
-from .errors import XdfNotLoadedError, XdfStreamParseError
+from .errors import XdfStreamParseError
 
 
 class XdfDecorators:
@@ -14,11 +14,8 @@ class XdfDecorators:
 
         @wraps(f)
         def wrapper(self, *args, **kwargs):
-            try:
-                self._assert_loaded()
-                return f(self, *args, **kwargs)
-            except XdfNotLoadedError as exc:
-                print(exc)
+            self._assert_loaded()
+            return f(self, *args, **kwargs)
 
         return wrapper
 
