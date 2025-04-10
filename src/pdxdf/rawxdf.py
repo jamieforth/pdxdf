@@ -1,6 +1,7 @@
 """Thin wrapper for loading and accessing raw XDF data."""
 
 import numbers
+from collections import namedtuple
 from collections.abc import Sequence
 
 import numpy as np
@@ -15,6 +16,8 @@ from .errors import (
     XdfNotLoadedError,
     XdfStreamLoadError,
 )
+
+SegmentInfo = namedtuple("SegmentInfo", ["segments", "clock_segments"])
 
 
 class RawXdf(BaseXdf, Sequence):
@@ -190,6 +193,22 @@ class RawXdf(BaseXdf, Sequence):
             with_stream_id=with_stream_id,
         )
         return data
+
+    @XdfDecorators.loaded
+    def segment_info(self, *stream_ids, exclude=[]):
+        segment_info = {
+            stream_id: len(segments)
+            for stream_id, segments in self.segments(
+                *stream_ids, exclude=exclude, with_stream_id=True
+            ).items()
+        }
+        clock_segment_info = {
+            stream_id: len(segments)
+            for stream_id, segments in self.clock_segments(
+                *stream_ids, exclude=exclude, with_stream_id=True
+            ).items()
+        }
+        return SegmentInfo(segment_info, clock_segment_info)
 
     @XdfDecorators.loaded
     def channel_info(self, *stream_ids, exclude=[], with_stream_id=False):

@@ -93,6 +93,11 @@ class BaseXdf(ABC):
         pass
 
     @abstractmethod
+    def segment_info(self):
+        """Return stream segment info."""
+        pass
+
+    @abstractmethod
     def channel_info(self):
         """Return loaded stream channel info."""
         pass
