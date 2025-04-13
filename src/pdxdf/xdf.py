@@ -231,13 +231,13 @@ class Xdf(RawXdf):
 
     @XdfDecorators.loaded
     def time_stamps(self, *stream_ids, exclude=[], with_stream_id=False):
-        """Return stream time-stamps as a DataFrame.
+        """Return stream time-stamps as a Series.
 
         Select data for stream_ids or default all loaded streams.
 
-        Multiple streams are returned as a dictionary {stream_id: DataFrame}
-        where number of items is equal to the number of streams. Single streams
-        are returned as is unless with_stream_id=True.
+        Multiple streams are returned as a dictionary {stream_id: Series} where
+        number of items is equal to the number of streams. Single streams are
+        returned as is unless with_stream_id=True.
         """
         if not self._time_stamps:
             print("No time-stamp data.")
@@ -300,7 +300,6 @@ class Xdf(RawXdf):
         else:
             return self._single_or_multi_stream_data(ts, with_stream_id)
 
-    @XdfDecorators.loaded
     def time_stamp_info(self, *stream_ids, exclude=[], min_segment=0):
         """Generate a summary of loaded time-stamp data."""
         time_stamps = self.time_stamps(
@@ -318,8 +317,8 @@ class Xdf(RawXdf):
                 data[(stream_id, i)] = pd.Series(
                     {
                         "sample_count": len(ts_seg),
-                        "first_timestamp": ts_seg.min().item(),
-                        "last_timestamp": ts_seg.max().item(),
+                        "first_timestamp": ts_seg.min(),
+                        "last_timestamp": ts_seg.max(),
                     }
                 )
         data = pd.DataFrame(data).T
@@ -356,7 +355,7 @@ class Xdf(RawXdf):
                 ts_seg = ts.loc[seg_start:seg_end+1]
                 if len(ts_seg) < min_segment:
                     continue
-                data[(stream_id, i)] = ts_seg["time_stamp"].diff()
+                data[(stream_id, i)] = ts_seg.diff()
         if concat:
             data = pd.DataFrame(data)
             data.attrs.update({"load_params": self.load_params})
@@ -586,7 +585,7 @@ class Xdf(RawXdf):
         items is equal to the number of streams.
         """
         data = super()._parse_time_stamps(data)
-        data = self._to_DataFrames(data, "sample", columns=["time_stamp"])
+        data = self._to_Series(data, index_name="sample", name="time_stamp")
         return data
 
     def _get_stream_data(
@@ -632,18 +631,33 @@ class Xdf(RawXdf):
                 data = data.loc[:, df_cols]
         return data
 
+    def _to_Series(self, data, index_name, name):
+        # Map a dictionary of {stream-id: data} to a dictionary of {stream-id:
+        # Series}.
+        data = {
+            stream_id: self._to_s(d, index_name, name=name)
+            for stream_id, d in data.items()
+        }
+        return data
+
+    def _to_s(self, data, index_name, name):
+        s = pd.Series(data, name=name)
+        s.index.set_names(index_name, inplace=True)
+        s.attrs.update({"load_params": self.load_params})
+        return s
+
     def _to_DataFrames(self, data, index_name, col_index_name=None, columns=None):
-        # Map a dictionary of {stream-id: data} to a dictionary of
-        # {stream-id: DataFrames}.
+        # Map a dictionary of {stream-id: data} to a dictionary of {stream-id:
+        # DataFrames}.
         data = {
             stream_id: self._to_df(
-                stream_id, d, index_name, col_index_name=col_index_name, columns=columns
+                d, index_name, col_index_name=col_index_name, columns=columns
             )
             for stream_id, d in data.items()
         }
         return data
 
-    def _to_df(self, stream_id, data, index_name, col_index_name=None, columns=None):
+    def _to_df(self, data, index_name, col_index_name=None, columns=None):
         df = pd.DataFrame(data, columns=columns)
         df.index.set_names(index_name, inplace=True)
         if col_index_name:
