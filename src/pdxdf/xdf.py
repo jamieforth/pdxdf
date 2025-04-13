@@ -301,7 +301,7 @@ class Xdf(RawXdf):
             return self._single_or_multi_stream_data(ts, with_stream_id)
 
     @XdfDecorators.loaded
-    def time_stamp_info(self, *stream_ids, exclude=[]):
+    def time_stamp_info(self, *stream_ids, exclude=[], min_segment=0):
         """Generate a summary of loaded time-stamp data."""
         time_stamps = self.time_stamps(
             *stream_ids, exclude=exclude, with_stream_id=True
@@ -310,13 +310,20 @@ class Xdf(RawXdf):
             return None
         data = {}
         for stream_id, ts in time_stamps.items():
-            data[stream_id] = {
-                "sample_count": len(ts),
-                "first_timestamp": ts.min().item(),
-                "last_timestamp": ts.max().item(),
-            }
+            segments = self.segments(stream_id)
+            for i, (seg_start, seg_end) in zip(range(len(segments)), segments):
+                ts_seg = ts.loc[seg_start:seg_end+1]
+                if len(ts_seg) < min_segment:
+                    continue
+                data[(stream_id, i)] = pd.Series(
+                    {
+                        "sample_count": len(ts_seg),
+                        "first_timestamp": ts_seg.min().item(),
+                        "last_timestamp": ts_seg.max().item(),
+                    }
+                )
         data = pd.DataFrame(data).T
-        data.index.rename("stream_id", inplace=True)
+        data.index.rename(["stream_id", "segment"], inplace=True)
         data["sample_count"] = data["sample_count"].astype(int)
         data["duration_sec"] = data["last_timestamp"] - data["first_timestamp"]
         data["duration_min"] = data["duration_sec"] / 60
