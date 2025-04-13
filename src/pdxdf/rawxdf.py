@@ -297,6 +297,7 @@ class RawXdf(BaseXdf, Sequence):
             with_stream_id=with_stream_id,
         )
 
+    @XdfDecorators.loaded
     def data(self, *stream_ids, exclude=[], with_stream_id=True):
         """Return combined time-series and time-stamp data.
 
