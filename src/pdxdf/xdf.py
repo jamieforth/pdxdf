@@ -508,6 +508,7 @@ class Xdf(RawXdf):
             return None
         df = pd.DataFrame(data).T
         df = df.astype(self._footer_types)
+        df.index.name = "stream_id"
         return df
 
     def _parse_clock_offsets(self, data, **kwargs):
