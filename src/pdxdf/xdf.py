@@ -333,7 +333,7 @@ class Xdf(RawXdf):
 
     @XdfDecorators.loaded
     def time_stamp_intervals(
-        self, *stream_ids, exclude=[], concat=False, with_stream_id=False
+        self, *stream_ids, exclude=[], concat=False, with_stream_id=False, min_segment=0,
     ):
         """Return time-stamp intervals for each stream.
 
@@ -351,7 +351,12 @@ class Xdf(RawXdf):
             return None
         data = {}
         for stream_id, ts in time_stamps.items():
-            data[stream_id] = ts["time_stamp"].diff()
+            segments = self.segments(stream_id)
+            for i, (seg_start, seg_end) in zip(range(len(segments)), segments):
+                ts_seg = ts.loc[seg_start:seg_end+1]
+                if len(ts_seg) < min_segment:
+                    continue
+                data[(stream_id, i)] = ts_seg["time_stamp"].diff()
         if concat:
             data = pd.DataFrame(data)
             data.attrs.update({"load_params": self.load_params})
