@@ -14,6 +14,7 @@ from .rawxdf import RawXdf, XdfDecorators
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
+
 class Xdf(RawXdf):
     """Main class for XDF data processing with pandas.
 
@@ -311,7 +312,7 @@ class Xdf(RawXdf):
         for stream_id, ts in time_stamps.items():
             segments = self.segments(stream_id)
             for i, (seg_start, seg_end) in zip(range(len(segments)), segments):
-                ts_seg = ts.loc[seg_start:seg_end+1]
+                ts_seg = ts.loc[seg_start : seg_end + 1]
                 if len(ts_seg) < min_segment:
                     continue
                 data[(stream_id, i)] = pd.Series(
@@ -332,7 +333,12 @@ class Xdf(RawXdf):
 
     @XdfDecorators.loaded
     def time_stamp_intervals(
-        self, *stream_ids, exclude=[], concat=False, with_stream_id=False, min_segment=0,
+        self,
+        *stream_ids,
+        exclude=[],
+        concat=False,
+        with_stream_id=False,
+        min_segment=0,
     ):
         """Return time-stamp intervals for each stream.
 
@@ -352,7 +358,7 @@ class Xdf(RawXdf):
         for stream_id, ts in time_stamps.items():
             segments = self.segments(stream_id)
             for i, (seg_start, seg_end) in zip(range(len(segments)), segments):
-                ts_seg = ts.loc[seg_start:seg_end+1]
+                ts_seg = ts.loc[seg_start : seg_end + 1]
                 if len(ts_seg) < min_segment:
                     continue
                 data[(stream_id, i)] = ts_seg.diff()
