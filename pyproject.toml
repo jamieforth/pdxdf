@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pandas[performance]>=2.2.3",
     "pyxdf",
-    "scipy>=1.15.1",
+    "scipy>=1.15.2",
 ]
 
 [project.optional-dependencies]
