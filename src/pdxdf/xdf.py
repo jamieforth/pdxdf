@@ -310,26 +310,36 @@ class Xdf(RawXdf):
         )
         if not time_stamps:
             return None
-        data = {}
+        data = []
         for stream_id, ts in time_stamps.items():
             segments = self.segments(stream_id)
             for i, (seg_start, seg_end) in zip(range(len(segments)), segments):
                 ts_seg = ts.loc[seg_start : seg_end + 1]
                 if len(ts_seg) < min_segment:
                     continue
-                data[(stream_id, i)] = pd.Series(
-                    {
-                        "sample_count": len(ts_seg),
-                        "first_timestamp": ts_seg.min(),
-                        "last_timestamp": ts_seg.max(),
-                    }
+                sample_count = len(ts_seg)
+                nominal_srate = self.info().loc[stream_id, "nominal_srate"]
+                data.append(
+                    pd.DataFrame(
+                        {
+                            "sample_count": sample_count,
+                            "first_timestamp": ts_seg.min(),
+                            "last_timestamp": ts_seg.max(),
+                            "nominal_srate": nominal_srate,
+                        },
+                        index=pd.MultiIndex.from_tuples(
+                            [(stream_id, i)], names=["stream_id", "segment"]
+                        ),
+                    )
                 )
-        data = pd.DataFrame(data).T
-        data.index.rename(["stream_id", "segment"], inplace=True)
-        data["sample_count"] = data["sample_count"].astype(int)
-        data["duration_sec"] = data["last_timestamp"] - data["first_timestamp"]
-        data["duration_min"] = data["duration_sec"] / 60
-        data["effective_srate"] = (data["sample_count"] - 1) / data["duration_sec"]
+        data = pd.concat(data)
+        data["nominal_duration"] = (data["sample_count"] - 1) / data["nominal_srate"]
+        data["effective_duration"] = data["last_timestamp"] - data["first_timestamp"]
+        data["effective_srate"] = (data["sample_count"] - 1) / data[
+            "effective_duration"
+        ]
+        data["srate_ratio"] = data["effective_srate"] / data["nominal_srate"]
+        data["duration_error"] = data["nominal_duration"] - data["effective_duration"]
         data.attrs.update({"load_params": self.load_params})
         return data
 
