@@ -5,8 +5,7 @@ import pandas as pd
 import pytest
 
 from pdxdf import Xdf
-
-from .helper_functions import counter, lslfmt2np, nominal_ts_index, sine
+from pdxdf.testing import counter, lslfmt2np, nominal_ts_index, sine
 
 # requires git clone https://github.com/jamieforth/example-files.git into the
 # root pdxdf folder
@@ -18,6 +17,7 @@ files = {
     }.items()
     if (path / value).exists()
 }
+
 
 @pytest.mark.parametrize("dejitter_timestamps", [False, True])
 @pytest.mark.parametrize("synchronize_clocks", [False, True])
