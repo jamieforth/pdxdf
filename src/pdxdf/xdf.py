@@ -250,7 +250,6 @@ class Xdf(RawXdf):
             with_stream_id=with_stream_id,
         )
 
-    @XdfDecorators.loaded
     def data(
         self,
         *stream_ids,
@@ -297,8 +296,11 @@ class Xdf(RawXdf):
         }
         if concat:
             ts = pd.concat(ts, axis=1).sort_index()
+            ts.attrs.update({"load_params": self.load_params})
             return ts
         else:
+            for t in ts.values():
+                t.attrs.update({"load_params": self.load_params})
             return self._single_or_multi_stream_data(ts, with_stream_id)
 
     def time_stamp_info(self, *stream_ids, exclude=[], min_segment=0):
