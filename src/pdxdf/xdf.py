@@ -90,13 +90,11 @@ class Xdf(RawXdf):
             ignore_missing_cols=ignore_missing_cols,
         )
 
-    @XdfDecorators.loaded
     def is_marker_stream(self, stream_id):
         """Test if stream is a marker stream."""
         srate = self.info(stream_id)["nominal_srate"].item()
         return srate == 0
 
-    @XdfDecorators.loaded
     def segment_info(self, *stream_ids, exclude=[]):
         segment_info = super().segment_info(*stream_ids, exclude=exclude)
         return pd.DataFrame(segment_info._asdict())
@@ -137,7 +135,6 @@ class Xdf(RawXdf):
             channel_info = pd.concat(channel_info, axis=1)
         return channel_info
 
-    @XdfDecorators.loaded
     def channel_scalings(self, *stream_ids, channel_scale_field):
         """Return a dictionary of DataFrames with channel scaling values."""
         stream_units = self.channel_info(
@@ -343,7 +340,6 @@ class Xdf(RawXdf):
         data.attrs.update({"load_params": self.load_params})
         return data
 
-    @XdfDecorators.loaded
     def time_stamp_intervals(
         self,
         *stream_ids,

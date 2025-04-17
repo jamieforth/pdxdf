@@ -194,7 +194,6 @@ class RawXdf(BaseXdf, Sequence):
         )
         return data
 
-    @XdfDecorators.loaded
     def segment_info(self, *stream_ids, exclude=[]):
         segment_info = {
             stream_id: len(segments)
@@ -297,7 +296,6 @@ class RawXdf(BaseXdf, Sequence):
             with_stream_id=with_stream_id,
         )
 
-    @XdfDecorators.loaded
     def data(self, *stream_ids, exclude=[], with_stream_id=True):
         """Return combined time-series and time-stamp data.
 
