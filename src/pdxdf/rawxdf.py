@@ -17,7 +17,7 @@ from .errors import (
     XdfStreamLoadError,
 )
 
-SegmentInfo = namedtuple("SegmentInfo", ["segments", "clock_segments"])
+SegmentCounts = namedtuple("SegmentCounts", ["segments", "clock_segments"])
 
 
 class RawXdf(BaseXdf, Sequence):
@@ -194,7 +194,7 @@ class RawXdf(BaseXdf, Sequence):
         )
         return data
 
-    def segment_info(self, *stream_ids, exclude=[]):
+    def segment_counts(self, *stream_ids, exclude=[]):
         segment_info = {
             stream_id: len(segments)
             for stream_id, segments in self.segments(
@@ -207,7 +207,27 @@ class RawXdf(BaseXdf, Sequence):
                 *stream_ids, exclude=exclude, with_stream_id=True
             ).items()
         }
-        return SegmentInfo(segment_info, clock_segment_info)
+        return SegmentCounts(segment_info, clock_segment_info)
+
+    def segment_size(self, *stream_ids, exclude=[]):
+        segment_size = {
+            (stream_id, segment): seg_stop + 1 - seg_start
+            for stream_id, segments in self.segments(
+                *stream_ids, exclude=exclude, with_stream_id=True
+            ).items()
+            for segment, (seg_start, seg_stop) in zip(range(0, len(segments)), segments)
+        }
+        return segment_size
+
+    def clock_segment_size(self, *stream_ids, exclude=[]):
+        segment_size = {
+            (stream_id, segment): seg_stop + 1 - seg_start
+            for stream_id, segments in self.clock_segments(
+                *stream_ids, exclude=exclude, with_stream_id=True
+            ).items()
+            for segment, (seg_start, seg_stop) in zip(range(0, len(segments)), segments)
+        }
+        return segment_size
 
     def segment_index(self, stream_id):
         segments = self.segments(stream_id)

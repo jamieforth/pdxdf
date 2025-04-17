@@ -93,8 +93,13 @@ class BaseXdf(ABC):
         pass
 
     @abstractmethod
-    def segment_info(self):
-        """Return stream segment info."""
+    def segment_counts(self):
+        """Return stream segment counts."""
+        pass
+
+    @abstractmethod
+    def segment_size(self):
+        """Return stream segment size."""
         pass
 
     @abstractmethod

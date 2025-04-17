@@ -95,9 +95,26 @@ class Xdf(RawXdf):
         srate = self.info(stream_id)["nominal_srate"].item()
         return srate == 0
 
-    def segment_info(self, *stream_ids, exclude=[]):
-        segment_info = super().segment_info(*stream_ids, exclude=exclude)
-        return pd.DataFrame(segment_info._asdict())
+    def segment_counts(self, *stream_ids, exclude=[]):
+        segment_counts = super().segment_counts(*stream_ids, exclude=exclude)
+        df = pd.DataFrame(segment_counts._asdict())
+        df.index.rename("stream_id", inplace=True)
+        return df
+
+    def segment_size(self, *stream_ids, exclude=[]):
+        segment_size = super().segment_size(*stream_ids, exclude=exclude)
+        segment_size = pd.Series(segment_size, name="segment_size")
+        segment_size.index.rename(["stream_id", "segment"], inplace=True)
+        return segment_size
+
+    def clock_segment_size(self, *stream_ids, exclude=[]):
+        segment_size = super().clock_segment_size(*stream_ids, exclude=exclude)
+        if len(segment_size) > 0:
+            segment_size = pd.Series(segment_size, name="clock_segment_size")
+            segment_size.index.rename(["stream_id", "segment"], inplace=True)
+            return segment_size
+        else:
+            return None
 
     def segment_index(self, stream_id):
         idx = super().segment_index(stream_id)
@@ -270,9 +287,7 @@ class Xdf(RawXdf):
         are returned as is unless with_stream_id=True.
 
         When concat=True return data concatenated into a single DataFrame along
-        columns. Warning - this can generate large DataFrames with shape
-        (total_samples, total_columns) as every sample is indexed by its own
-        timestamp.
+        the index.
 
         This does not align samples to a common time index, for that see
         `resample`.
@@ -298,11 +313,11 @@ class Xdf(RawXdf):
                 "time_stamp",
                 append=True,
             )
-            .droplevel("sample")
+            .rename_axis(columns="channel")
             for stream_id, ts in time_series.items()
         }
         if concat:
-            ts = pd.concat(ts, axis=1).sort_index()
+            ts = pd.concat(ts, axis=0, names=["stream_id"]).sort_index()
             ts.attrs.update({"load_params": self.load_params})
             return ts
         else:

@@ -142,21 +142,50 @@ def test_resample_file_parse(synchronize_clocks, dejitter_timestamps):
         assert xdf.clock_segments() == {1: [], 2: [], 3: [], 4: []}
 
     if synchronize_clocks:
-        segment_info = pd.DataFrame(
+        segment_counts = pd.DataFrame(
             {
                 "segments": {1: 1, 2: 1, 3: 1, 4: 1},
                 "clock_segments": {1: 1, 2: 1, 3: 1, 4: 1},
             },
         )
-        pd.testing.assert_frame_equal(xdf.segment_info(), segment_info)
+        segment_counts.index.rename("stream_id", inplace=True)
+        pd.testing.assert_frame_equal(xdf.segment_counts(), segment_counts)
     else:
-        segment_info = pd.DataFrame(
+        segment_counts = pd.DataFrame(
             {
                 "segments": {1: 1, 2: 1, 3: 1, 4: 1},
                 "clock_segments": {1: 0, 2: 0, 3: 0, 4: 0},
             },
         )
-        pd.testing.assert_frame_equal(xdf.segment_info(), segment_info)
+        segment_counts.index.rename("stream_id", inplace=True)
+        pd.testing.assert_frame_equal(xdf.segment_counts(), segment_counts)
+
+    segment_size = pd.Series(
+        {
+            (1, 0): 30721,
+            (2, 0): 61,
+            (3, 0): 30721,
+            (4, 0): 61,
+        },
+        name="segment_size",
+    )
+    segment_size.index.rename(["stream_id", "segment"], inplace=True)
+    pd.testing.assert_series_equal(xdf.segment_size(), segment_size)
+
+    clock_segment_size = pd.Series(
+        {
+            (1, 0): 30721,
+            (2, 0): 61,
+            (3, 0): 30721,
+            (4, 0): 61,
+        },
+        name="clock_segment_size",
+    )
+    clock_segment_size.index.rename(["stream_id", "segment"], inplace=True)
+    if synchronize_clocks:
+        pd.testing.assert_series_equal(xdf.clock_segment_size(), clock_segment_size)
+    else:
+        assert xdf.clock_segment_size() is None
 
     # Channels
     data_channels = pd.DataFrame(
@@ -261,6 +290,7 @@ def test_resample_file_parse(synchronize_clocks, dejitter_timestamps):
             xdf.time_stamps(stream_id).iloc[-1],
             xdf.info(stream_id)["nominal_srate"].item(),
             endpoint=True,
+            segment=0,
         )
         if not synchronize_clocks:
             if not dejitter_timestamps:
@@ -283,6 +313,7 @@ def test_resample_file_parse(synchronize_clocks, dejitter_timestamps):
             xdf.time_stamps(stream_id).iloc[-1],
             1,  # Defined in test
             endpoint=True,
+            segment=0,
         )
         if not synchronize_clocks:
             if not dejitter_timestamps:
@@ -305,10 +336,24 @@ def test_resample_file_parse(synchronize_clocks, dejitter_timestamps):
         dtype = lslfmt2np(xdf.info(stream_id)["channel_format"].item())
         for f in ch_freq:
             sig = ts[f"sine {f}Hz"]
-            sig_expected, _ = sine(f, stop=60, fs=fs, endpoint=True, dtype=dtype)
+            sig_expected, _ = sine(
+                f,
+                stop=60,
+                fs=fs,
+                endpoint=True,
+                dtype=dtype,
+                segment=0,
+            )
             pd.testing.assert_series_equal(sig, sig_expected)
         count = ts["counter 1"]
-        count_expected, _ = counter(start=0, stop=60, fs=fs, endpoint=True, dtype=dtype)
+        count_expected, _ = counter(
+            start=0,
+            stop=60,
+            fs=fs,
+            endpoint=True,
+            dtype=dtype,
+            segment=0,
+        )
         pd.testing.assert_series_equal(count, count_expected)
 
     # Time-series: Marker streams
@@ -317,6 +362,11 @@ def test_resample_file_parse(synchronize_clocks, dejitter_timestamps):
         dtype = lslfmt2np(xdf.info(stream_id)["channel_format"].item())
         marker = ts[f"counter {fs}"]
         marker_expected, _ = counter(
-            start=0, stop=60, fs=fs, endpoint=True, dtype=dtype
+            start=0,
+            stop=60,
+            fs=fs,
+            endpoint=True,
+            dtype=dtype,
+            segment=0,
         )
         pd.testing.assert_series_equal(marker, marker_expected)
