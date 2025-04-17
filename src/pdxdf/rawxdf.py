@@ -209,6 +209,15 @@ class RawXdf(BaseXdf, Sequence):
         }
         return SegmentInfo(segment_info, clock_segment_info)
 
+    def segment_index(self, stream_id):
+        segments = self.segments(stream_id)
+        idx = [
+            (i, j)
+            for i, (start, stop) in zip(range(len(segments)), segments)
+            for j in range(start, stop + 1)
+        ]
+        return idx
+
     @XdfDecorators.loaded
     def channel_info(self, *stream_ids, exclude=[], with_stream_id=False):
         """Return raw stream channel info.

@@ -99,6 +99,11 @@ class Xdf(RawXdf):
         segment_info = super().segment_info(*stream_ids, exclude=exclude)
         return pd.DataFrame(segment_info._asdict())
 
+    def segment_index(self, stream_id):
+        idx = super().segment_index(stream_id)
+        idx = pd.MultiIndex.from_tuples(idx, names=("segment", "sample"))
+        return idx
+
     @XdfDecorators.loaded
     def channel_info(
         self,
@@ -207,7 +212,7 @@ class Xdf(RawXdf):
         ignore_missing_cols=False,
         with_stream_id=False,
     ):
-        """Return stream time-series data as a DataFrame.
+        """Return stream time-series data as a segmented DataFrame.
 
         Select data for stream_ids or default all loaded streams.
 
@@ -229,7 +234,7 @@ class Xdf(RawXdf):
 
     @XdfDecorators.loaded
     def time_stamps(self, *stream_ids, exclude=[], with_stream_id=False):
-        """Return stream time-stamps as a Series.
+        """Return stream time-stamps as a segmented Series.
 
         Select data for stream_ids or default all loaded streams.
 
@@ -288,7 +293,12 @@ class Xdf(RawXdf):
             return None
 
         ts = {
-            stream_id: ts.join(time_stamps[stream_id]).set_index("time_stamp")
+            stream_id: ts.join(time_stamps[stream_id])
+            .set_index(
+                "time_stamp",
+                append=True,
+            )
+            .droplevel("sample")
             for stream_id, ts in time_series.items()
         }
         if concat:
@@ -559,7 +569,7 @@ class Xdf(RawXdf):
         items is equal to the number of streams.
         """
         data = super()._parse_time_series(data)
-        data = self._to_DataFrames(data, "sample", col_index_name="channel")
+        data = self._to_DataFrames(data, segment_index=True, col_index_name="channel")
 
         if channel_scale_field:
             scalings = self.channel_scalings(channel_scale_field=channel_scale_field)
@@ -600,7 +610,7 @@ class Xdf(RawXdf):
         items is equal to the number of streams.
         """
         data = super()._parse_time_stamps(data)
-        data = self._to_Series(data, index_name="sample", name="time_stamp")
+        data = self._to_Series(data, name="time_stamp", segment_index=True)
         return data
 
     def _get_stream_data(
@@ -646,35 +656,57 @@ class Xdf(RawXdf):
                 data = data.loc[:, df_cols]
         return data
 
-    def _to_Series(self, data, index_name, name):
+    def _to_Series(self, data, name, index_name=None, segment_index=False):
         # Map a dictionary of {stream-id: data} to a dictionary of {stream-id:
         # Series}.
         data = {
-            stream_id: self._to_s(d, index_name, name=name)
-            for stream_id, d in data.items()
-        }
-        return data
-
-    def _to_s(self, data, index_name, name):
-        s = pd.Series(data, name=name)
-        s.index.set_names(index_name, inplace=True)
-        s.attrs.update({"load_params": self.load_params})
-        return s
-
-    def _to_DataFrames(self, data, index_name, col_index_name=None, columns=None):
-        # Map a dictionary of {stream-id: data} to a dictionary of {stream-id:
-        # DataFrames}.
-        data = {
-            stream_id: self._to_df(
-                d, index_name, col_index_name=col_index_name, columns=columns
+            stream_id: self._to_s(
+                stream_id,
+                d,
+                name=name,
+                index_name=index_name,
+                segment_index=segment_index,
             )
             for stream_id, d in data.items()
         }
         return data
 
-    def _to_df(self, data, index_name, col_index_name=None, columns=None):
-        df = pd.DataFrame(data, columns=columns)
-        df.index.set_names(index_name, inplace=True)
+    def _to_s(self, stream_id, data, name, index_name=None, segment_index=False):
+        if segment_index:
+            idx = self.segment_index(stream_id)
+            s = pd.Series(data, index=idx, name=name)
+        else:
+            s = pd.Series(data, name=name)
+            s.index.set_names(index_name, inplace=True)
+        s.attrs.update({"load_params": self.load_params})
+        return s
+
+    def _to_DataFrames(
+        self, data, index_name=None, segment_index=False, col_index_name=None
+    ):
+        # Map a dictionary of {stream-id: data} to a dictionary of {stream-id:
+        # DataFrames}.
+        data = {
+            stream_id: self._to_df(
+                stream_id,
+                d,
+                index_name,
+                segment_index=segment_index,
+                col_index_name=col_index_name,
+            )
+            for stream_id, d in data.items()
+        }
+        return data
+
+    def _to_df(
+        self, stream_id, data, index_name=None, segment_index=False, col_index_name=None
+    ):
+        if segment_index:
+            idx = self.segment_index(stream_id)
+            df = pd.DataFrame(data, idx)
+        else:
+            df = pd.DataFrame(data)
+            df.index.set_names(index_name, inplace=True)
         if col_index_name:
             df.columns.set_names(col_index_name, inplace=True)
         df.attrs.update({"load_params": self.load_params})
