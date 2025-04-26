@@ -250,7 +250,7 @@ class Xdf(RawXdf):
         )
 
     @XdfDecorators.loaded
-    def time_stamps(self, *stream_ids, exclude=[], with_stream_id=False):
+    def time_stamps(self, *stream_ids, exclude=[], concat=False, with_stream_id=False):
         """Return stream time-stamps as a segmented Series.
 
         Select data for stream_ids or default all loaded streams.
@@ -258,16 +258,24 @@ class Xdf(RawXdf):
         Multiple streams are returned as a dictionary {stream_id: Series} where
         number of items is equal to the number of streams. Single streams are
         returned as is unless with_stream_id=True.
+
+        When concat=True return data concatenated into a single Series along
+        the index.
         """
         if not self._time_stamps:
             print("No time-stamp data.")
             return None
-        return self._get_stream_data(
+        ts = self._get_stream_data(
             *stream_ids,
             exclude=exclude,
             data=self._time_stamps,
-            with_stream_id=with_stream_id,
+            with_stream_id=True,
         )
+        if concat:
+            ts = pd.concat(ts, axis=0, names=["stream_id", "segment", "sample"])
+            return ts
+        else:
+            return self._single_or_multi_stream_data(ts, with_stream_id)
 
     def data(
         self,
@@ -327,34 +335,18 @@ class Xdf(RawXdf):
 
     def time_stamp_info(self, *stream_ids, exclude=[], min_segment=0):
         """Generate a summary of loaded time-stamp data."""
-        time_stamps = self.time_stamps(
-            *stream_ids, exclude=exclude, with_stream_id=True
-        )
-        if not time_stamps:
+        time_stamps = self.time_stamps(*stream_ids, exclude=exclude, concat=True)
+        if time_stamps.empty:
             return None
-        data = []
-        for stream_id, ts in time_stamps.items():
-            segments = self.segments(stream_id)
-            for i, (seg_start, seg_end) in zip(range(len(segments)), segments):
-                ts_seg = ts.loc[seg_start : seg_end + 1]
-                if len(ts_seg) < min_segment:
-                    continue
-                sample_count = len(ts_seg)
-                nominal_srate = self.info().loc[stream_id, "nominal_srate"]
-                data.append(
-                    pd.DataFrame(
-                        {
-                            "sample_count": sample_count,
-                            "first_timestamp": ts_seg.min(),
-                            "last_timestamp": ts_seg.max(),
-                            "nominal_srate": nominal_srate,
-                        },
-                        index=pd.MultiIndex.from_tuples(
-                            [(stream_id, i)], names=["stream_id", "segment"]
-                        ),
-                    )
-                )
-        data = pd.concat(data)
+        data = time_stamps.groupby(level=["stream_id", "segment"]).agg(
+            sample_count="count",
+            first_timestamp="min",
+            last_timestamp="max",
+        )
+        if min_segment > 0:
+            data = data.loc[data["sample_count"] > min_segment]
+        nominal_srate = self.info()["nominal_srate"]
+        data = data.join(nominal_srate)
         data["nominal_duration"] = (data["sample_count"] - 1) / data["nominal_srate"]
         data["effective_duration"] = data["last_timestamp"] - data["first_timestamp"]
         data["effective_srate"] = (data["sample_count"] - 1) / data[
@@ -369,38 +361,21 @@ class Xdf(RawXdf):
         self,
         *stream_ids,
         exclude=[],
-        concat=False,
-        with_stream_id=False,
         min_segment=0,
     ):
         """Return time-stamp intervals for each stream.
 
-        Multiple streams are returned as a dictionary {stream_id: DataFrame}
-        where number of items is equal to the number of streams. Single streams
-        are returned as is unless with_stream_id=True.
-
-        When concat=True return data concatenated into a single DataFrame along
-        columns.
+        Multiple streams are returned as a single Series indexed by [stream_id,
+        segment, sample].
         """
-        time_stamps = self.time_stamps(
-            *stream_ids, exclude=exclude, with_stream_id=True
-        )
-        if time_stamps is None:
+        time_stamps = self.time_stamps(*stream_ids, exclude=exclude, concat=True)
+        if time_stamps.empty:
             return None
-        data = {}
-        for stream_id, ts in time_stamps.items():
-            segments = self.segments(stream_id)
-            for i, (seg_start, seg_end) in zip(range(len(segments)), segments):
-                ts_seg = ts.loc[seg_start : seg_end + 1]
-                if len(ts_seg) < min_segment:
-                    continue
-                data[(stream_id, i)] = ts_seg.diff()
-        if concat:
-            data = pd.DataFrame(data)
-            data.attrs.update({"load_params": self.load_params})
-            return data
-        else:
-            return self._single_or_multi_stream_data(data, with_stream_id)
+        if min_segment > 0:
+            seg_size = self.segment_size(*stream_ids, exclude)
+            time_stamps = time_stamps.loc[seg_size > min_segment]
+        data = time_stamps.groupby(["stream_id", "segment"]).diff()
+        return data
 
     def resample(self, *stream_ids, fs_new, exclude=[], cols=None,
                  ignore_missing_cols=False):
