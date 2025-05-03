@@ -101,10 +101,12 @@ class Xdf(RawXdf):
         df.index.rename("stream_id", inplace=True)
         return df
 
-    def segment_size(self, *stream_ids, exclude=[]):
+    def segment_size(self, *stream_ids, exclude=[], min_segment=0):
         segment_size = super().segment_size(*stream_ids, exclude=exclude)
         segment_size = pd.Series(segment_size, name="segment_size")
         segment_size.index.rename(["stream_id", "segment"], inplace=True)
+        if min_segment > 0:
+            segment_size = segment_size.loc[segment_size > min_segment]
         return segment_size
 
     def clock_segment_size(self, *stream_ids, exclude=[]):
