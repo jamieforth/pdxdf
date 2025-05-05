@@ -5,11 +5,11 @@ import logging
 import mne
 import numpy as np
 import pandas as pd
-import scipy
 
 from .constants import microvolts
 from .errors import NoLoadableStreamsError, XdfAlreadyLoadedError
 from .rawxdf import RawXdf, XdfDecorators
+from .resampling import resample_stream, resample_fft
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -379,66 +379,122 @@ class Xdf(RawXdf):
         data = time_stamps.groupby(["stream_id", "segment"]).diff()
         return data
 
-    def resample(self, *stream_ids, fs_new, exclude=[], cols=None,
-                 ignore_missing_cols=False):
     @XdfDecorators.loaded
+    def resample(
+        self,
+        *stream_ids,
+        fs_max_ratio=None,
+        fs_new=None,
+        fn=resample_fft,
+        params={},
+        exclude=[],
+        cols=None,
+        ignore_missing_cols=False,
+        concat=True,
+        with_stream_id=False,
+    ):
         """
         Resample multiple XDF streams to a given frequency.
-
-        Based on mneLab:
-        https://github.com/cbrnr/mnelab/blob/main/src/mnelab/io/xdf.py.
 
         Parameters
         ----------
         stream_ids : list[int]
             The IDs of the desired streams.
-        fs_new : float
+        fs_max_ratio : int
+            Resample at this ratio to the maximum stream nominal sample rate. Defaults
+            to `1` if `fs_new` is not provided.
+        fs_new : int
             Resampling target frequency in Hz.
+        fn : function
+            Resampling function to apply.
+        params : dict
+            Dictionary of optional keyword arguments to pass to resampling function.
+        concat : bool (default: True)
+            When concat=True return resampled time-series as a single DataFrame,
+            concatenated along columns, otherwise return a dictionary {stream_id: df}.
 
         Returns
         -------
-        all_time_series : np.ndarray
-            Array of shape (n_samples, n_channels) containing raw data. Time
-            intervals where a stream has no data contain `np.nan`.
-        first_time : float
-            Time of the very first sample in seconds.
+        time_series, markers, new_fs : tuple
+          - time_series:
+              - DataFrame (num_samples, total_columns) when concat=True
+              - dict {stream_id: DataFrame (num_samples , num_columns)} when concat=False
+            DataFrames are sample-indexed. Where a stream has no data corresponding to
+            the resampled sampled-index sample values are `np.nan`.
+          - markers:
+              - dict {stream_id: DataFrame (num_markers, num_channels)}
+            DataFrames are time-indexed (seconds)
+          - new_fs : int
+            Either the provided `fs_new` value or `fs_new` calculated from
+            `fs_max_ratio`.
         """
-        if cols is not None and not isinstance(cols, list):
-            cols = [cols]
-        start_times = []
-        end_times = []
-        n_total_chans = 0
-        for stream_id, time_stamps in self.time_stamps(
-            *stream_ids, exclude=exclude, with_stream_id=True
-        ).items():
-            start_times.append(time_stamps.iloc[0].item())
-            end_times.append(time_stamps.iloc[-1].item())
-            if cols:
-                n_total_chans += len(cols)
-            else:
-                n_total_chans += self.metadata(stream_id)['channel_count'].item()
-        first_time = min(start_times)
-        last_time = max(end_times)
+        if fs_max_ratio is not None and fs_new is not None:
+            raise ValueError("Must provide either `fs_max_ratio` or `fs_new`.")
+        if fs_new is None:
+            if fs_max_ratio is None:
+                fs_max_ratio = 1
+            # Get fs_new from all loaded streams (except excluded).
+            fs_new = int(
+                self.info(cols="nominal_srate", exclude=exclude).max().item()
+                * fs_max_ratio
+            )
+        print(f"Resampling to {fs_new} Hz.")
 
-        n_samples = int(np.ceil((last_time - first_time) * fs_new))
+        data = self.data(
+            *stream_ids,
+            exclude=exclude,
+            cols=cols,
+            ignore_missing_cols=ignore_missing_cols,
+            with_stream_id=True,
+        )
+        if data is None:
+            print("No data to resample.")
+            return None
+
+        # Get resample time-stamp range from all loaded streams (except
+        # excluded).
+        ts_info = self.time_stamp_info(exclude=exclude)
+        first_time_min = ts_info["first_timestamp"].min()
+        last_time_max = ts_info["last_timestamp"].max()
+
         all_resampled = {}
+        all_markers = {}
 
-        for stream_id, time_stamps in self.time_stamps(
-            *stream_ids, exclude=exclude, with_stream_id=True
-        ).items():
-            start_time = time_stamps.iloc[0].item()
-            end_time = time_stamps.iloc[-1].item()
-            len_new = int(np.ceil((end_time - start_time) * fs_new))
+        for stream_id, df in data.items():
+            if not self.is_marker_stream(stream_id):
+                # Regular sample-rate stream.
+                fs = self.info(stream_id)["nominal_srate"].item()
+                resampled = resample_stream(
+                    df,
+                    fs_old=fs,
+                    fs_new=fs_new,
+                    first_time_min=first_time_min,
+                    last_time_max=last_time_max,
+                    fn=fn,
+                    params=params,
+                )
+                all_resampled[stream_id] = resampled
+            else:
+                # Marker stream.
+                df = df.droplevel(["segment", "sample"])
+                df.index = df.index - first_time_min
+                all_markers[stream_id] = df
 
-            x_old = self.time_series(stream_id,
-                                     exclude=exclude,
-                                     cols=cols,
-                                     ignore_missing_cols=ignore_missing_cols)
-            x_new = scipy.signal.resample(x_old, len_new, axis=0)
-            resampled = np.full((n_samples, x_new.shape[1]), np.nan)
+        if concat:
+            all_resampled = pd.concat(all_resampled, axis="columns")
+            all_resampled.columns.rename("stream", level=0, inplace=True)
+            return (
+                all_resampled,
+                all_markers,
+                fs_new,
+            )
+        else:
+            return (
+                self._single_or_multi_stream_data(all_resampled, with_stream_id),
+                all_markers,
+                fs_new,
+            )
 
-            row_start = int(
-                np.floor((time_stamps.iloc[0].item() - first_time) * fs_new)
             )
             row_end = row_start + x_new.shape[0]
             col_end = x_new.shape[1]
@@ -563,30 +619,31 @@ class Xdf(RawXdf):
         data = super()._parse_time_series(data)
         data = self._to_DataFrames(data, segment_index=True, col_index_name="channel")
 
-        if channel_scale_field:
+        if channel_scale_field is not None:
             scalings = self.channel_scalings(channel_scale_field=channel_scale_field)
             if scalings:
                 data = {
-                    stream_id: ts * scalings[stream_id][channel_scale_field]
+                    stream_id: df * scalings[stream_id][channel_scale_field]
                     if (
                         stream_id in scalings
                         and not (scalings[stream_id] == 1).all().item()
                     )
-                    else ts
-                    for stream_id, ts in data.items()
+                    else df
+                    for stream_id, df in data.items()
                 }
 
-        if channel_name_field:
+        if channel_name_field is not None:
             ch_labels = self.channel_info(cols=channel_name_field, with_stream_id=True)
             if ch_labels:
                 data = {
-                    stream_id: ts.rename(
+                    stream_id: df.rename(
                         columns=ch_labels[stream_id].loc[:, channel_name_field]
                     )
                     if stream_id in ch_labels
-                    else ts
-                    for stream_id, ts in data.items()
+                    else df
+                    for stream_id, df in data.items()
                 }
+
         return data
 
     def _parse_time_stamps(self, data, **kwargs):

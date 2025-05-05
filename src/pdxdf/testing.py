@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from pdxdf.resampling import nominal_sample_index
+
 
 def lslfmt2np(channel_format):
     lslfmt_map = {
@@ -15,41 +17,6 @@ def lslfmt2np(channel_format):
     return lslfmt_map[channel_format]
 
 
-def nominal_ts_index(start, stop, fs, endpoint=False, segment=None):
-    """
-    start: Start time in seconds
-    stop: End point in seconds
-    fs: Sampling frequency
-    endpoint: Include end point
-    segment: Segment index value
-    """
-    tdiff = 1 / fs
-    if endpoint:
-        t = pd.Series(
-            np.arange(start, stop + tdiff / 2, tdiff),
-            name="time_stamp",
-            dtype=np.float64,
-        )
-    else:
-        t = pd.Series(
-            np.arange(start, stop, tdiff),
-            name="time_stamp",
-            dtype=np.float64,
-        )
-    if segment is None:
-        t.index.set_names("sample", inplace=True)
-    else:
-        index = pd.MultiIndex.from_arrays(
-            [
-                np.repeat(segment, t.shape[0]),
-                t.index,
-            ],
-            names=["segment", "sample"],
-        )
-        t.index = index
-    return t
-
-
 def sine(
     freq=1,
     amp=1,
@@ -57,9 +24,10 @@ def sine(
     start=0,
     stop=1,
     fs=100,
-    endpoint=False,
+    endpoint=True,
     dtype=None,
     segment=None,
+    time_stamp_index=False,
 ):
     """
     freq: Fundamental frequency (Hz)
@@ -69,31 +37,51 @@ def sine(
     stop: End point in seconds
     fs: Sampling frequency
     endpoint: Include end point
+    dtype: Series data type
     segment: Segment index value
+    time_stamps: Include time_stamps in index
     """
     period = 2 * np.pi
 
-    t = nominal_ts_index(start, stop, fs, endpoint=endpoint, segment=segment)
+    t = nominal_sample_index(start, stop, fs, endpoint=endpoint, segment=segment)
     sig = pd.Series(
         np.sin(phase + (period * freq * t)) * amp, name=f"sine {freq}Hz", dtype=dtype
     )
-    return sig, t
+    if time_stamp_index:
+        sig = pd.concat([sig, t], axis=1).set_index("time_stamp", append=True)
+        return sig.iloc[:, 0]
+    else:
+        return sig, t
 
 
-def counter(start=0, stop=1, fs=100, endpoint=False, dtype=None, segment=None):
+def counter(
+    start=0,
+    stop=1,
+    fs=100,
+    endpoint=True,
+    dtype=None,
+    segment=None,
+    time_stamp_index=False,
+):
     """
     start: Start time in seconds
     stop: End point in seconds
     fs: Sampling frequency
     endpoint: Include end point
+    dtype: Series data type
     segment: Segment index value
+    time_stamps: Include time_stamps in index
     """
 
-    t = nominal_ts_index(start, stop, fs, endpoint=endpoint, segment=segment)
+    t = nominal_sample_index(start, stop, fs=fs, endpoint=endpoint, segment=segment)
     sig = pd.Series(
         np.arange(0, t.shape[0], 1),
-        name=f"counter 1",
+        name=f"counter {fs}",   # FIXME: Should be Hz.
         dtype=dtype,
         index=t.index,
     )
-    return sig, t
+    if time_stamp_index:
+        sig = pd.concat([sig, t], axis=1).set_index("time_stamp", append=True)
+        return sig.iloc[:, 0]
+    else:
+        return sig, t

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from pdxdf import Xdf
-from pdxdf.testing import counter, lslfmt2np, nominal_ts_index, sine
+from pdxdf.testing import counter, lslfmt2np, nominal_sample_index, sine
 
 # requires git clone https://github.com/jamieforth/example-files.git into the
 # root pdxdf folder
@@ -285,7 +285,7 @@ def test_resample_file_parse(synchronize_clocks, dejitter_timestamps):
 
     # Time-stamps: Data streams
     for stream_id, time_stamps in xdf.time_stamps(1, 3).items():
-        nominal_ts = nominal_ts_index(
+        nominal_ts = nominal_sample_index(
             xdf.time_stamps(stream_id).iloc[0],
             xdf.time_stamps(stream_id).iloc[-1],
             xdf.info(stream_id)["nominal_srate"].item(),
@@ -308,7 +308,7 @@ def test_resample_file_parse(synchronize_clocks, dejitter_timestamps):
 
     # Time-stamps: Marker streams
     for stream_id, time_stamps in xdf.time_stamps(2, 4).items():
-        nominal_ts = nominal_ts_index(
+        nominal_ts = nominal_sample_index(
             xdf.time_stamps(stream_id).iloc[0],
             xdf.time_stamps(stream_id).iloc[-1],
             1,  # Defined in test
@@ -354,6 +354,7 @@ def test_resample_file_parse(synchronize_clocks, dejitter_timestamps):
             dtype=dtype,
             segment=0,
         )
+        count_expected.name="counter 1"
         pd.testing.assert_series_equal(count, count_expected)
 
     # Time-series: Marker streams
