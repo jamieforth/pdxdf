@@ -495,17 +495,82 @@ class Xdf(RawXdf):
                 fs_new,
             )
 
-            )
-            row_end = row_start + x_new.shape[0]
-            col_end = x_new.shape[1]
-            resampled[row_start:row_end, 0:col_end] = x_new
-            resampled = pd.DataFrame(resampled, columns=x_old.columns)
-            all_resampled[stream_id] = resampled
+    def raw_mne(
+        self,
+        *stream_ids,
+        fs_max_ratio=None,
+        fs_new=None,
+        fn=resample_fft,
+        params={},
+        exclude=[],
+        cols=None,
+        channel_info_map=None,
+        annotation_fn=None,
+        ignore_missing_cols=False,
+        with_stream_id=False,
+    ):
+        """Return mne.io.Raw objects from XDF streams.
 
-        all_resampled = pd.concat(all_resampled, axis='columns')
-        all_resampled.columns.rename('stream', level=0, inplace=True)
-        all_resampled.attrs.update({'load_params': self.load_params})
-        return all_resampled, first_time
+        Multiple streams are returned as a dictionary {stream_id: DataFrame}
+        where number of items is equal to the number of streams. Single streams
+        are returned as is unless with_stream_id=True.
+        """
+        data, markers, fs = self.resample(
+            *stream_ids,
+            fs_max_ratio=fs_max_ratio,
+            fs_new=fs_new,
+            fn=fn,
+            params=params,
+            exclude=exclude,
+            cols=cols,
+            ignore_missing_cols=ignore_missing_cols,
+            concat=False,
+            with_stream_id=True,
+        )
+        data = {
+            stream_id: self._xdf_to_mne(
+                stream_id,
+                df,
+                markers,
+                fs,
+                channel_info_map=channel_info_map,
+                annotation_fn=annotation_fn,
+            )
+            for stream_id, df in data.items()
+        }
+        return self._single_or_multi_stream_data(data, with_stream_id), markers
+
+    def _xdf_to_mne(
+        self, stream_id, df, markers, fs, channel_info_map=None, annotation_fn=None
+    ):
+        channels = None
+        channel_info = self.channel_info(stream_id)
+        if channel_info is not None:
+            channels = channel_info.loc[channel_info["label"].isin(df.columns)]
+            if channel_info_map is not None:
+                channels = channels.replace(channel_info_map)
+
+        if channels is not None and "label" in channels:
+            # MNE info requires a list of channel names or the number of channels.
+            channel_names = list(channels["label"])
+        else:
+            channel_names = df.shape[1]
+        if channels is not None and "type" in channels:
+            # MNE info requires a list of channel types. If not available it
+            # defaults to 'misc', so we do the same.
+            channel_types = list(channels["type"])
+        else:
+            channel_types = "misc"
+
+        ts = df.T
+        info = mne.create_info(channel_names, fs, channel_types)
+        orig_time = self.header()["datetime"]
+        info.set_meas_date(orig_time)
+        raw = mne.io.RawArray(ts, info)
+        if annotation_fn is not None:
+            annotations = annotation_fn(markers, orig_time)
+            raw.set_annotations(annotations)
+        return raw
 
     # Non public methods.
 
