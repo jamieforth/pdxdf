@@ -386,12 +386,12 @@ class Xdf(RawXdf):
         fs_max_ratio=None,
         fs_new=None,
         fn=resample_fft,
-        params={},
         exclude=[],
         cols=None,
         ignore_missing_cols=False,
         concat=True,
         with_stream_id=False,
+        **kwargs,
     ):
         """
         Resample multiple XDF streams to a given frequency.
@@ -407,11 +407,11 @@ class Xdf(RawXdf):
             Resampling target frequency in Hz.
         fn : function
             Resampling function to apply.
-        params : dict
-            Dictionary of optional keyword arguments to pass to resampling function.
         concat : bool (default: True)
             When concat=True return resampled time-series as a single DataFrame,
             concatenated along columns, otherwise return a dictionary {stream_id: df}.
+        kwargs
+            Optional keyword arguments to pass to resampling function.
 
         Returns
         -------
@@ -455,7 +455,6 @@ class Xdf(RawXdf):
         # excluded).
         ts_info = self.time_stamp_info(exclude=exclude)
         first_time_min = ts_info["first_timestamp"].min()
-        last_time_max = ts_info["last_timestamp"].max()
 
         all_resampled = {}
         all_markers = {}
@@ -469,9 +468,8 @@ class Xdf(RawXdf):
                     fs_old=fs,
                     fs_new=fs_new,
                     first_time_min=first_time_min,
-                    last_time_max=last_time_max,
                     fn=fn,
-                    params=params,
+                    **kwargs,
                 )
                 all_resampled[stream_id] = resampled
             else:
@@ -501,13 +499,13 @@ class Xdf(RawXdf):
         fs_max_ratio=None,
         fs_new=None,
         fn=resample_fft,
-        params={},
         exclude=[],
         cols=None,
         channel_info_map=None,
         annotation_fn=None,
         ignore_missing_cols=False,
         with_stream_id=False,
+        **kwargs,
     ):
         """Return mne.io.Raw objects from XDF streams.
 
@@ -520,12 +518,12 @@ class Xdf(RawXdf):
             fs_max_ratio=fs_max_ratio,
             fs_new=fs_new,
             fn=fn,
-            params=params,
             exclude=exclude,
             cols=cols,
             ignore_missing_cols=ignore_missing_cols,
             concat=False,
             with_stream_id=True,
+            **kwargs,
         )
         data = {
             stream_id: self._xdf_to_mne(
@@ -569,7 +567,28 @@ class Xdf(RawXdf):
         raw = mne.io.RawArray(ts, info)
         if annotation_fn is not None:
             annotations = annotation_fn(markers, orig_time)
-            raw.set_annotations(annotations)
+            raw.annotations.append(
+                annotations.onset,
+                annotations.duration,
+                annotations.description,
+            )
+        else:
+            # Default extract first marker channels.
+            annotations = [
+                mne.Annotations(
+                    marker_stream.index,
+                    0,
+                    marker_stream.iloc[:, 0],
+                    orig_time=orig_time,
+                )
+                for marker_stream in markers.values()
+            ]
+            for annot in annotations:
+                raw.annotations.append(
+                    annot.onset,
+                    annot.duration,
+                    annot.description,
+                )
         return raw
 
     # Non public methods.

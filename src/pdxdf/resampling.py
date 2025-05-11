@@ -7,9 +7,7 @@ import scipy.signal as signal
 
 def nominal_sample_count(start, stop, fs):
     if stop < start:
-        raise ValueError(
-            f"stop ({stop}) cannot be earlier than start ({start})."
-        )
+        raise ValueError(f"stop ({stop}) cannot be earlier than start ({start}).")
     count = int(Decimal((stop - start) * fs).quantize(0, ROUND_HALF_UP))
     return count + 1
 
@@ -31,8 +29,6 @@ def nominal_sample_index(start, stop, fs, endpoint=True, segment=None):
     segment: Segment index value
     """
     num = nominal_sample_count(start, stop, fs)
-    #stop = stop * fs
-    #tdiff = 1 / fs
     if not endpoint:
         num -= 1
     t = pd.Series(
@@ -54,26 +50,58 @@ def nominal_sample_index(start, stop, fs, endpoint=True, segment=None):
     return t
 
 
-def interp(df, fs_new, params={}, **kwargs):
+def duration(n_samples, fs):
+    return n_samples / fs
+
+def resample_count(n_samples, fs_old, fs_new):
+    return int((n_samples * Decimal(fs_new) / Decimal(fs_old)).quantize(0, ROUND_HALF_UP))
+
+def resample_index(n_samples, start, fs_old, fs_new):
+    n_samples = resample_count(n_samples, fs_old, fs_new)
+    return (np.arange(0, n_samples) / fs_new) + start
+
+def interp(df, fs_old, fs_new, **kwargs):
     t_old = df.index.get_level_values("time_stamp")
     first_time = t_old.min()
     last_time = t_old.max()
-    t_new = nominal_sample_index(first_time, last_time, fs_new)
+    t_new = resample_index(
+        nominal_sample_count(first_time, last_time, fs_old),
+        first_time,
+        fs_old,
+        fs_new,
+    )
     n_samples = t_new.shape[0]
     n_chans = df.shape[1]
     aligned = np.full((n_samples, n_chans), np.nan)
     for i in range(n_chans):
         aligned[:, i] = np.interp(
-            t_new.values, t_old.values, df.iloc[:, i].values, **params
+            t_new, t_old.values, df.iloc[:, i].values, **kwargs
         )
     return aligned, first_time
 
 
-def resample_fft(df, fs_new, params={}, **kwargs):
+def resample_fft(df, fs_old, fs_new, **kwargs):
     first_time = df.index.get_level_values("time_stamp").min()
     last_time = df.index.get_level_values("time_stamp").max()
-    num = nominal_sample_count(first_time, last_time, fs_new)
-    return signal.resample(df, num, **params), first_time
+    num = resample_count(
+        nominal_sample_count(first_time, last_time, fs_old),
+        fs_old,
+        fs_new,
+    )
+    return signal.resample(df, num, **kwargs), first_time
+
+
+def align_segment_start(df, first_time_min, fs_new):
+    first_time = df.index.get_level_values("time_stamp").min()
+    sample_offset = nominal_sample_offset(first_time, first_time_min, fs_new)
+    if sample_offset != 0:
+        time_offset = sample_offset / fs_new
+        aligned_start_time = first_time_min + time_offset
+        shift = first_time - aligned_start_time
+        df.reset_index("time_stamp", inplace=True)
+        df["time_stamp"] = df["time_stamp"] - shift
+        df.set_index("time_stamp", append=True, inplace=True)
+    return df
 
 
 def resample_stream(
@@ -81,15 +109,26 @@ def resample_stream(
     fs_old,
     fs_new,
     first_time_min,
-    last_time_max,
     fn=resample_fft,
-    params={},
+    **kwargs,
 ):
-    resampled = df.groupby(level="segment").apply(
-        lambda seg: fn(seg, fs_old=fs_old, fs_new=fs_new, params=params)
+    # Shift first timestamp to closest resampled index.
+    df = df.groupby(level="segment", group_keys=False).apply(
+        lambda seg: align_segment_start(seg, first_time_min, fs_new)
     )
+    # Recalculate last_time_max in case the last stream rounds up when aligned
+    # to the closest resampled index - should only make the resampled data one
+    # sample longer than the synchronised `last_time_max`.
+    last_time_max = df.index.get_level_values("time_stamp").max()
 
-    n_samples = nominal_sample_count(first_time_min, last_time_max, fs_new)
+    resampled = df.groupby(level="segment").apply(
+        lambda seg: fn(seg, fs_old=fs_old, fs_new=fs_new, **kwargs)
+    )
+    n_samples = resample_count(
+        nominal_sample_count(first_time_min, last_time_max, fs_old),
+        fs_old,
+        fs_new,
+    )
     n_chans = df.shape[1]
     aligned = np.full((n_samples, n_chans), np.nan)
 
@@ -101,5 +140,5 @@ def resample_stream(
     aligned = pd.DataFrame(aligned, columns=df.columns)
     aligned.index.rename("sample", inplace=True)
     aligned.attrs.update(df.attrs)
-    aligned.attrs.update({"resample_params": {"fs": fs_new}})
+    aligned.attrs.update({"resample_params": {"fs": fs_new} | kwargs})
     return aligned
