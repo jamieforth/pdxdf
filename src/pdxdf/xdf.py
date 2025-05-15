@@ -451,9 +451,9 @@ class Xdf(RawXdf):
             print("No data to resample.")
             return None
 
-        # Get resample time-stamp range from all loaded streams (except
-        # excluded).
-        ts_info = self.time_stamp_info(exclude=exclude)
+        # Get first time-stamp from all loaded streams - including excluded
+        # streams so that the earliest possible time-stamp is used.
+        ts_info = self.time_stamp_info()
         first_time_min = ts_info["first_timestamp"].min()
 
         all_resampled = {}
