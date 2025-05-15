@@ -112,6 +112,8 @@ def resample_stream(
     fn=resample_fft,
     **kwargs,
 ):
+    if df.empty:
+        raise ValueError("Cannot resample empty stream!")
     # Shift first timestamp to closest resampled index.
     df = df.groupby(level="segment", group_keys=False).apply(
         lambda seg: align_segment_start(seg, first_time_min, fs_new)

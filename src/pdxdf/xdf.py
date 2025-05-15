@@ -460,6 +460,9 @@ class Xdf(RawXdf):
         all_markers = {}
 
         for stream_id, df in data.items():
+            if df.empty:
+                # Skip empty streams.
+                continue
             if not self.is_marker_stream(stream_id):
                 # Regular sample-rate stream.
                 fs = self.info(stream_id)["nominal_srate"].item()
