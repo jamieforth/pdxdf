@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 import numpy as np
@@ -175,45 +175,24 @@ def test_nominal_sample_offset(first_time, first_time_min, fs, expected):
     assert nominal_sample_offset(first_time, first_time_min, fs) == expected
 
 
+@pytest.mark.parametrize("fn", [resample_fft, interp])
+@pytest.mark.parametrize("fs", [1, 2, 100, 512])
 @pytest.mark.parametrize(
-    "fn",
+    "start, stop",
     [
-        resample_fft, interp
-    ]
-)
-@pytest.mark.parametrize(
-    "segment, fs",
-    [
-        # fs=1
-        ((0, 0), 1),
-        ((0, 1), 1),
-        ((1, 1), 1),
-        ((1, 2), 1),
-        ((0, 10), 1),
-        ((1, 10), 1),
-        ((-1, 10), 1),
-        # fs=2
-        ((0, 0), 2),
-        ((0, 1), 2),
-        ((1, 1), 2),
-        ((1, 2), 2),
-        ((0, 10), 2),
-        ((1, 10), 2),
-        ((-1, 10), 2),
-        # fs=100
-        ((0, 1), 100),
-        ((0, 60), 100),
-        ((1, 60), 100),
-        ((-1, 60), 100),
-        # fs=512
-        ((0, 1), 512),
-        ((0, 60), 512),
-        ((1, 60), 512),
-        ((-1, 60), 512),
+        (0, 0),
+        (0, 1),
+        (1, 1),
+        (1, 2),
+        (0, 10),
+        (1, 10),
+        (-1, 10),
+        (0, 60),
+        (1, 60),
+        (-1, 60),
     ],
 )
-def test_resample_segment(segment, fs, fn):
-    start, stop = segment
+def test_resample_segment_same(start, stop, fs, fn):
     if fn is resample_fft:
         s = sine(
             freq=1, start=start, stop=stop, fs=fs, endpoint=True, time_stamp_index=True
@@ -221,18 +200,73 @@ def test_resample_segment(segment, fs, fn):
     else:
         s = counter(start=start, stop=stop, fs=fs, endpoint=True, time_stamp_index=True)
     df = s.to_frame()
-    df_new, first_time = fn(df, fs_new=fs, fs_old=fs)
+    x_new, first_time = fn(df, fs_old=fs, fs_new=fs)
     assert first_time == start
-    assert df_new.shape == df.shape
-    np.testing.assert_allclose(df_new, df, atol=1e-14)
+    assert x_new.shape == df.shape
+    np.testing.assert_allclose(x_new, df, atol=1e-14)
 
 
+@pytest.mark.parametrize("fn", [
+    interp,
+    resample_fft,
+])
 @pytest.mark.parametrize(
-    "fn",
+    "fs_old, fs_new",
     [
-        resample_fft, interp
-    ]
+        (2, 4),
+        (1, 2),
+        (10, 20),
+        (20, 10),
+        (100, 200),
+        (200, 100),
+        (512, 256),
+    ],
 )
+@pytest.mark.parametrize(
+    "start, stop",
+    [
+        (0, 0),
+        (0, 1),
+        (1, 1),
+        (1, 2),
+        (0, 10),
+        (1, 10),
+        (-1, 10),
+        (0, 60),
+        (1, 60),
+        (-1, 60),
+    ],
+)
+def test_resample_segment_different(start, stop, fs_old, fs_new, fn):
+    if fn is resample_fft:
+        s = sine(
+            freq=1, start=start, stop=stop, fs=fs_old, endpoint=True, time_stamp_index=True
+        )
+    else:
+        s = counter(start=start, stop=stop, fs=fs_old, endpoint=True, time_stamp_index=True)
+    df = s.to_frame()
+    x_new, first_time = fn(df, fs_old=fs_old, fs_new=fs_new)
+    assert first_time == start
+    fs_ratio = Decimal(fs_new) / fs_old
+    assert x_new.shape[0] == max((df.shape[0] * fs_ratio).quantize(0, ROUND_HALF_UP), 1)
+    if fs_old < fs_new:
+        # Upsampling
+        step = int(max(fs_ratio.quantize(0, ROUND_HALF_UP), 1))
+        if fn is resample_fft:
+            np.testing.assert_allclose(x_new[0::step], df, atol=1e-14)
+        else:
+            np.testing.assert_equal(x_new[0::step], df)
+    else:
+        # Downsampling
+        fs_ratio = Decimal(fs_old) / fs_new
+        step = int(max(fs_ratio.quantize(0, ROUND_HALF_UP), 1))
+        if fn is resample_fft:
+            np.testing.assert_allclose(x_new, df.loc[0::step], atol=0.35) # Check this!
+        else:
+            np.testing.assert_equal(x_new, df.loc[0::step])
+
+
+@pytest.mark.parametrize("fn", [resample_fft, interp])
 @pytest.mark.parametrize(
     "segments, fs",
     [
@@ -240,9 +274,14 @@ def test_resample_segment(segment, fs, fn):
         ([(0, 1), (1, 2)], 1),
         ([(0, 5), (5, 10)], 1),
         ([(0, 1), (1.1, 2.2)], 1),
+        ([(0, 1), (1, 1.74)], 1),
         # fs=2
+        ([(0, 1), (1.1, 2.2)], 2),
+        #([(0, 1), (1.3, 2.3)], 2),  # gap
+        #([(0, 1), (1.1, 2.34)], 2),
         ([(0, 5), (5, 10)], 2),
         # fs=100
+        #([(0, 1), (1.1, 2.2)], 100),
         ([(0, 5), (5, 10)], 100),
         ([(0, 100), (100, 100)], 100),
     ],
@@ -278,27 +317,44 @@ def test_resample_stream(segments, fs, fn):
             ]
         )
     df = s.to_frame()
-    df_new = resample_stream(
+    x_new = resample_stream(
         df,
         fs_old=fs,
         fs_new=fs,
-        first_time_min=df.index.get_level_values("time_stamp").min(),
-        last_time_max=df.index.get_level_values("time_stamp").max(),
+        first_time_min=df.index.get_level_values("time_stamp")[0],
     )
     np.testing.assert_allclose(
-        df_new,
+        x_new,
         df.droplevel(["segment", "time_stamp"]),
         atol=1e-14,
     )
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize(
-    "segments, fs, fs_new, expected",
+    "fn",
+    [
+        #resample_fft,
+        interp,
+    ],
+)
+@pytest.mark.parametrize(
+    "segments, fs_old, fs_new, expected",
     [
         # fs=1
-        ([(0, 2), (2, 4)], 1, 1, [0, 1, 0, 1]),
-        ([(0, 2), (2, 4)], 1, 2, [0, 0.5, 1, 1.5, 0, 0.5, 1, 1.5]),
+        ([(0, 0), (1, 1)], 1, 1, [0, 0]),
+        ([(0, 1), (2, 3)], 1, 1, [0, 1, 0, 1]),
+        ([(0, 2), (3, 5)], 1, 1, [0, 1, 2, 0, 1, 2]),
+        # break
+        ([(0, 0), (2, 2)], 1, 1, [0, np.nan, 0]),
+        # fs=2
+        ([(0, 0.5), (1, 1.5)], 2, 2, [0, 1, 0, 1]),
+        ([(0, 1.5), (2, 3.5)], 2, 2, [0, 1, 2, 3, 0, 1, 2, 3]),
+        ([(0, 2.5), (3, 5.5)], 2, 2, [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5]),
+        # fs 1-> 2
+        #([(0, 1), (1, 2)], 1, 2, [0, 0]),
+        ([(0, 1), (1.5, 2.5)], 1, 2, [0, 0.5, 1, 0, 0.5, 1, 1, np.nan]),
+        # FIXME: should this extrapolate?
+        #([(0, 2), (2, 4)], 1, 2, [0, 0.5, 1, 1.5, 0, 0.5, 1, 1.5]),
         # ([(0, 5), (5, 10)], 1),
         # ([(0, 1), (1.1, 2.2)], 1),
         # # fs=2
@@ -308,31 +364,48 @@ def test_resample_stream(segments, fs, fn):
         # ([(0, 100), (100, 100)], 100),
     ],
 )
-def test_resample_fs(segments, fs, fs_new, expected):
-    s = pd.concat(
-        [
-            counter(
-                first_time, last_time, fs=fs, segment=segment, time_stamp_index=True
-            )
-            for (first_time, last_time), segment in zip(
-                segments, range(0, len(segments))
-            )
-        ]
-    )
+def test_resample_fs(segments, fs_old, fs_new, expected, fn):
+    if fn is resample_fft:
+        s = pd.concat(
+            [
+                sine(
+                    freq=1,
+                    start=start,
+                    stop=stop,
+                    fs=fs_old,
+                    endpoint=True,
+                    segment=segment,
+                    time_stamp_index=True,
+                )
+                for (start, stop), segment in zip(segments, range(0, len(segments)))
+            ]
+        )
+    else:
+        s = pd.concat(
+            [
+                counter(
+                    start=start,
+                    stop=stop,
+                    fs=fs_old,
+                    endpoint=True,
+                    segment=segment,
+                    time_stamp_index=True,
+                )
+                for (start, stop), segment in zip(segments, range(0, len(segments)))
+            ]
+        )
     df = s.to_frame()
-    print(df)
-    df_new = resample_stream(
+    x_new = resample_stream(
         df,
-        fs,
-        fs_new,
-        df.index.get_level_values("time_stamp").min(),
-        df.index.get_level_values("time_stamp").max(),
+        fs_old=fs_old,
+        fs_new=fs_new,
+        first_time_min=df.index.get_level_values("time_stamp")[0],
+        fn=fn,
     )
     expected = pd.DataFrame(expected, columns=df.columns)
     expected.rename_axis("sample", inplace=True)
-    print(df_new, expected)
     np.testing.assert_allclose(
-        df_new,
+        x_new,
         expected,
         rtol=1e-12,
         atol=1e-12,
