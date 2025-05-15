@@ -565,7 +565,7 @@ class Xdf(RawXdf):
 
         ts = df.T
         info = mne.create_info(channel_names, fs, channel_types)
-        orig_time = self.header()["datetime"]
+        orig_time = self.header()["datetime"].tz_convert('utc')
         info.set_meas_date(orig_time)
         raw = mne.io.RawArray(ts, info)
         if annotation_fn is not None:
