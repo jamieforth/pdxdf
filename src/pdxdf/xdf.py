@@ -481,7 +481,7 @@ class Xdf(RawXdf):
                 df.index = df.index - first_time_min
                 all_markers[stream_id] = df
 
-        if concat:
+        if concat and (len(all_resampled) > 0):
             all_resampled = pd.concat(all_resampled, axis="columns")
             all_resampled.columns.rename("stream", level=0, inplace=True)
             return (
