@@ -10,7 +10,7 @@ license = {text = "BSD-3-Clause"}
 requires-python = ">=3.11"
 
 dependencies = [
-    "pandas[performance]>=2.2.3",
+    "pandas[performance,hdf5]>=2.2.3",
     "pyxdf",
     "scipy>=1.15.2",
 ]
