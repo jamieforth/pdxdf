@@ -10,14 +10,10 @@ license = {text = "BSD-3-Clause"}
 requires-python = ">=3.11"
 
 dependencies = [
+    "mne>=1.9.0",
     "pandas[performance,hdf5]>=2.2.3",
     "pyxdf",
     "scipy>=1.15.2",
-]
-
-[project.optional-dependencies]
-mne = [
-    "mne>=1.9.0",
 ]
 
 [project.urls]

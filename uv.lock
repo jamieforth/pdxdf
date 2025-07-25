@@ -850,14 +850,10 @@ name = "pdxdf"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "mne" },
     { name = "pandas", extra = ["hdf5", "performance"] },
     { name = "pyxdf" },
     { name = "scipy" },
-]
-
-[package.optional-dependencies]
-mne = [
-    { name = "mne" },
 ]
 
 [package.dev-dependencies]
@@ -869,12 +865,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mne", marker = "extra == 'mne'", specifier = ">=1.9.0" },
+    { name = "mne", specifier = ">=1.9.0" },
     { name = "pandas", extras = ["performance", "hdf5"], specifier = ">=2.2.3" },
     { name = "pyxdf", git = "http://github.com/jamieforth/pyxdf?branch=neurolive" },
     { name = "scipy", specifier = ">=1.15.2" },
 ]
-provides-extras = ["mne"]
 
 [package.metadata.requires-dev]
 dev = [
